@@ -60,6 +60,7 @@ blocks/              再利用ブロック (*.pad)
 rules/pad-11.2609.json  PAD 11.2609.183.0 向け lint ルール
 examples/            汎用レシピ例 (架空の mytool.exe)
 tests/PadKit.Tests/  PadKit.Flow のテスト (Designer は実機依存のため対象外)
+docs/design.md       設計書 (アーキテクチャ・言語仕様・lint モデル・決定記録)
 ```
 
 ## CLI
