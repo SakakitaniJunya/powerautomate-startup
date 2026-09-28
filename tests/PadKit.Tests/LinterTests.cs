@@ -92,6 +92,10 @@ public class LinterTests
         Assert.True(Clean("SET Y TO %x%%", "PAD007"));
         // ただし SET Y TO %... 自体は PAD006
         Assert.True(Hits("SET Y TO %x%%", "PAD006"));
+        // PAD の %% エスケープ (Webhook URL 等) は誤検知しない
+        Assert.True(Clean(
+            "SET U TO $'''https://x/paths/invoke?sp=%%2Ftriggers%%2Fmanual%%2Frun&sig=abc'''",
+            "PAD007"));
     }
 
     [Fact]

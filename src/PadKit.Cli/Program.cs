@@ -225,9 +225,10 @@ int DesignerRun(Opts o, PadKit.Designer.PadDesigner designer)
         foreach (var t in r.ErrorTexts)
             Console.WriteLine($"  ! {t}");
     }
-    if (r.Errors > 0)
+    if (r.Actions == 0 || r.Errors > 0)
     {
-        Console.Error.WriteLine("SKIP-RUN (errors present)");
+        Console.Error.WriteLine(
+            r.Actions == 0 ? "SKIP-RUN (paste produced 0 actions)" : "SKIP-RUN (errors present)");
         return 2;
     }
     designer.Save();
