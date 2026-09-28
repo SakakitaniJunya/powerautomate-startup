@@ -1,0 +1,5 @@
+#! param Title
+#! param Message
+#! param Timeout default="10"
+# 情報ダイアログを表示 (Timeout 秒で自動的に閉じる)
+Display.ShowMessageDialog.ShowMessageWithTimeout Title: $'''{{Title}}''' Message: {{Message}} Icon: Display.Icon.Information Buttons: Display.Buttons.OK DefaultButton: Display.DefaultButton.Button1 IsTopMost: False Timeout: {{Timeout}}

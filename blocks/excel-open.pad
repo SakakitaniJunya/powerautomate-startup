@@ -1,0 +1,4 @@
+#! param Path
+#! param Into default="Excel"
+# Excel を起動してブックを開く
+Excel.LaunchExcel.LaunchAndOpen Path: {{Path}} Visible: True ReadOnly: False LoadAddInsAndMacros: False Instance=> {{Into}}

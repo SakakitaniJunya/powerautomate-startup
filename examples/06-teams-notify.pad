@@ -1,0 +1,25 @@
+# ============================================================
+# 06 - 実行結果を Teams チャネルに Webhook 通知
+# ------------------------------------------------------------
+# mytool.exe の結果を Teams チャネルに POST する。
+# 事前準備: チャネルの「…」→「ワークフロー」→「Webhook アラートを
+#   チャネルに送信する」で URL を取得 → プロファイルの WebhookUrl へ。
+#   ※ URL 中の % は %% にエスケープする。
+# 本文は Adaptive Card 形式が必須。応答は HTTP 202 なので 2xx を成功扱い。
+# ============================================================
+#! requires: ExePath WorkDir WebhookUrl
+
+{{> run-cli-or-exit Args="list --format json" Into="Result"}}
+
+# --- Teams に送る JSON 本文を組み立て ---
+SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"mytool 実行完了","weight":"bolder","size":"medium","color":"accent"},{"type":"FactSet","facts":[{"title":"件数","value":"%Result.items.Count%"}]},{"type":"Container","style":"emphasis","items":[{"type":"TextBlock","text":"mytool.exe + PAD 自動実行フロー","isSubtle":true,"wrap":true,"size":"small"}]}]}}]}'''
+
+# --- Webhook POST ---
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+
+IF (WebStatus < 200) OR (WebStatus > 299) THEN
+    {{> warn-dialog Title="Teams 通知失敗" Message="$'''HTTP %WebStatus% : %WebResponse%'''" Timeout="30"}}
+    EXIT
+END
+
+{{> info-dialog Title="完了" Message="$'''Teams に通知しました (HTTP %WebStatus%)'''"}}

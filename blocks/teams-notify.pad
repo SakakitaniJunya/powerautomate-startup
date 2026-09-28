@@ -1,0 +1,4 @@
+#! param Url
+#! param Body
+# Teams Webhook へ Adaptive Card JSON を POST (応答は HTTP 202)
+Web.InvokeWebService.InvokeWebService Url: {{Url}} Method: Web.Method.Post Accept: $'''application/json''' ContentType: $'''application/json''' RequestBody: {{Body}} EncodeRequestBody: False TrimRequestBody: True ClearCookies: True FailOnErrorStatus: False FollowRedirection: True UserAgent: $'''Mozilla/5.0''' ConnectionTimeout: 30 AcceptUntrustedCertificates: False Response=> WebResponse ResponseHeaders=> WebHeaders StatusCode=> WebStatus

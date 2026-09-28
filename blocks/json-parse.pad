@@ -1,0 +1,4 @@
+#! param Into
+#! param Json default="CliOut"
+# stdout の JSON をカスタムオブジェクトへ変換
+Variables.ConvertJsonToCustomObject Json: {{Json}} CustomObject=> {{Into}}

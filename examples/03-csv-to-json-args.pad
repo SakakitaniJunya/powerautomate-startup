@@ -1,0 +1,23 @@
+# ============================================================
+# 03 - CSV を読んで JSON 引数を組み立て mytool.exe を実行
+# ------------------------------------------------------------
+# 想定する CSV (先頭行ヘッダ): name,score
+# PAD 側で JSON 文字列を組み立てて CLI 引数へ渡す例。
+# ============================================================
+#! requires: ExePath WorkDir CsvPath
+
+{{> read-csv Path="CsvPath" Into="Lines"}}
+
+# [{"name":"a","score":1}, ...] 形式の JSON を組み立てる
+SET LinesJson TO $'''['''
+LOOP FOREACH Row IN Lines
+    SET LinesJson TO $'''%LinesJson%{"name":"%Row[0]%","score":%Row[1]%},'''
+END
+SET LinesJson TO $'''%LinesJson%]'''
+
+{{> run-cli-or-exit Args="aggregate --lines \"%LinesJson%\"" Into="Summary"}}
+
+# 結果を表示（全角 ％ を使う例: 半角 % を式の直後に書くとパース拒否される）
+SET Message TO $'''合計 %Summary.total% 件 / 達成率 %Summary.rate%％'''
+
+{{> info-dialog Title="集計結果" Message="Message" Timeout="30"}}

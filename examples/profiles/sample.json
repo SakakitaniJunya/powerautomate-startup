@@ -1,0 +1,13 @@
+{
+  "ExePath": "C:\\tools\\mytool\\mytool.exe",
+  "WorkDir": "C:\\tools\\mytool",
+  "OutPath": "C:\\tools\\mytool\\out\\result.csv",
+  "SummaryOutPath": "C:\\tools\\mytool\\out\\all_summary.csv",
+  "InDir": "C:\\tools\\mytool\\in",
+  "DoneDir": "C:\\tools\\mytool\\done",
+  "ErrorLog": "C:\\tools\\mytool\\out\\errors.log",
+  "LogPath": "C:\\tools\\mytool\\out\\flow.log",
+  "CsvPath": "C:\\tools\\mytool\\samples\\lines.csv",
+  "LedgerPath": "C:\\tools\\mytool\\samples\\ledger.xlsx",
+  "WebhookUrl": "https://example.webhook.office.com/webhookb2/xxxxx"
+}

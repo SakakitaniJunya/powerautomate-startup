@@ -1,0 +1,3 @@
+#! param Args
+# CLI を実行し stdout/stderr/exit code を CliOut/CliErr/CliExit へ格納
+Scripting.RunDOSCommand.RunDOSCommand DOSCommandOrApplication: $'''%ExePath% {{Args}}''' WorkingDirectory: WorkDir StandardOutput=> CliOut StandardError=> CliErr ExitCode=> CliExit

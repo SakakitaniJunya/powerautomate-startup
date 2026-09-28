@@ -1,0 +1,25 @@
+# ============================================================
+# 05 - リトライ・ログ・エラー終了の共通パターン
+# ------------------------------------------------------------
+# mytool.exe 実行部分を「失敗してもリトライする」形にする雛形。
+#   - LOOP WHILE : CliExit が 0 になるか MaxRetry 回まで回す
+#   - IF CliExit <> 0 : 最終失敗ならダイアログを出して終了
+#   - File.WriteText : LogPath へ追記（UTF8）
+# ============================================================
+#! requires: ExePath WorkDir LogPath
+
+SET MaxRetry TO 3
+
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+
+# リトライループ (retry-cli ブロック)
+{{> retry-cli Args="run --job daily" LogPath="LogPath" MaxRetry="MaxRetry"}}
+
+IF CliExit <> 0 THEN
+    {{> fail-dialog-exit Title="実行エラー" Message="CliErr"}}
+END
+
+{{> append-log Path="LogPath" Text="%Now% [INFO] 正常終了: %CliOut%"}}
+
+{{> json-parse Into="Result"}}
+{{> info-dialog Title="結果" Message="$'''結果: %Result.value%'''" Timeout="30"}}

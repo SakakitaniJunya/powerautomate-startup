@@ -1,0 +1,21 @@
+# ============================================================
+# 01 - mytool.exe を実行して結果 JSON を CSV 出力
+# ------------------------------------------------------------
+# 使い方: padkit render でテキスト生成 → PAD デザイナーに貼り付け。
+# mytool.exe は stdout に {"items":[{"id":..,"value":..}]} を返す想定。
+# ============================================================
+#! requires: ExePath WorkDir OutPath
+
+{{> run-cli-or-exit Args="list --format json" Into="Result"}}
+
+# items 配列を回して CSV 行を組み立て
+SET CsvLines TO $'''id,value
+'''
+LOOP FOREACH Item IN Result.items
+    SET CsvLines TO $'''%CsvLines%%Item.id%,%Item.value%
+'''
+END
+
+{{> write-text Path="OutPath" Text="CsvLines"}}
+
+{{> info-dialog Title="完了" Message="$'''%OutPath% に出力しました'''"}}

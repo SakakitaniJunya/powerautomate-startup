@@ -1,0 +1,107 @@
+{
+  "padVersion": "11.2609.183.0",
+  "twoSegmentAllow": [
+    "Variables.ConvertJsonToCustomObject",
+    "File.WriteText",
+    "File.Move",
+    "Folder.GetFiles"
+  ],
+  "rules": [
+    {
+      "id": "PAD001",
+      "severity": "error",
+      "scope": "code",
+      "pattern": "^\\s*System\\.RunDOSCommand\\b",
+      "message": "旧2セグメント名 System.RunDOSCommand は使えません",
+      "fix": "Scripting.RunDOSCommand.RunDOSCommand を使う"
+    },
+    {
+      "id": "PAD003",
+      "severity": "error",
+      "scope": "code",
+      "pattern": "Display\\.Icon\\.Error",
+      "message": "Display.Icon.Error はこのバージョンで解析不能です (有効: None/Information/Question/Warning)",
+      "fix": "Display.Icon.Warning を使う"
+    },
+    {
+      "id": "PAD004",
+      "severity": "error",
+      "scope": "code",
+      "pattern": "\\bCSVFilePath:",
+      "message": "CSV 読込の引数名は CSVFilePath: ではありません",
+      "fix": "CSVFile: に直す"
+    },
+    {
+      "id": "PAD005",
+      "severity": "error",
+      "scope": "code",
+      "pattern": "File\\.WriteText\\b.*\\bFilePath:",
+      "message": "File.WriteText の引数名は FilePath: ではありません",
+      "fix": "File: に直す"
+    },
+    {
+      "id": "PAD006",
+      "severity": "error",
+      "scope": "code",
+      "pattern": "^\\s*SET\\s+\\w+\\s+TO\\s+%",
+      "message": "SET の式値を % で囲むことはできません",
+      "fix": "% を外す (例: SET X TO G.rate * 100)"
+    },
+    {
+      "id": "PAD007",
+      "severity": "error",
+      "scope": "string",
+      "pattern": "%[^%]+%%(?![A-Za-z_])",
+      "message": "文字列中の '%式%%' (式の直後に半角 %) はパース拒否されます",
+      "fix": "直後の % を全角 '％' にする"
+    },
+    {
+      "id": "PAD008",
+      "severity": "error",
+      "scope": "code",
+      "pattern": "^\\s*ON BLOCK ERROR\\b",
+      "message": "ON BLOCK ERROR はこのバージョンの貼り付けで受理されません",
+      "fix": "LOOP WHILE + IF + WAIT で代替する (examples/05-retry-and-log.pad 参照)"
+    },
+    {
+      "id": "PAD009",
+      "severity": "error",
+      "scope": "line",
+      "pattern": "\\bLoopIndex\\b",
+      "message": "LOOP FOREACH は LoopIndex を生成しません",
+      "fix": "カウンタ変数を +1 して使う"
+    },
+    {
+      "id": "PAD010",
+      "severity": "error",
+      "scope": "code",
+      "pattern": "Excel\\.ReadFromExcel\\.ReadAllCells\\b.*\\bFirstLineContainsColumnNames:",
+      "message": "ReadAllCells の引数名は FirstLineContainsColumnNames: ではありません",
+      "fix": "FirstLineIsHeader: に直す"
+    },
+    {
+      "id": "PAD011",
+      "severity": "error",
+      "scope": "code",
+      "pattern": "System\\.RunApplication\\.RunApplication\\b.*\\bTimeout:",
+      "message": "System.RunApplication.RunApplication に Timeout: 引数はありません",
+      "fix": "Timeout: を削除する"
+    },
+    {
+      "id": "PAD012",
+      "severity": "warning",
+      "scope": "code",
+      "pattern": "Web\\.InvokeWebService\\.InvokeWebService\\b.*EncodeRequestBody:\\s*True",
+      "message": "EncodeRequestBody: True だと JSON 本文が URL エンコードされて壊れます",
+      "fix": "EncodeRequestBody: False にする"
+    },
+    {
+      "id": "PAD013",
+      "severity": "warning",
+      "scope": "code",
+      "pattern": "Excel\\.CloseExcel\\.Close\\b(?!AndSave)",
+      "message": "Excel.CloseExcel.Close は未検証です (検証済みは CloseAndSave)",
+      "fix": "Excel.CloseExcel.CloseAndSave を使う"
+    }
+  ]
+}

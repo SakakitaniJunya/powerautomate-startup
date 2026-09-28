@@ -1,0 +1,10 @@
+#! param Args
+#! param Into
+#! param Title default="エラー"
+#! param Message default="CliErr"
+# CLI 実行 → 失敗ならダイアログを出して終了 → 成功なら JSON をパース
+{{> run-cli Args="{{Args}}"}}
+IF CliExit <> 0 THEN
+    {{> fail-dialog-exit Title="{{Title}}" Message="{{Message}}"}}
+END
+{{> json-parse Into="{{Into}}"}}

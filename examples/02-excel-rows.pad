@@ -1,0 +1,28 @@
+# ============================================================
+# 02 - Excel の行を1行ずつ読んで mytool.exe を実行し結果を書き戻す
+# ------------------------------------------------------------
+# 想定する Excel (先頭行がヘッダ):
+#   A: 名前  B: 値1  C: 値2  D: 結果(出力)
+# LOOP FOREACH は LoopIndex を生成しないので RowIndex 変数を +1 する。
+# ============================================================
+#! requires: ExePath WorkDir LedgerPath ErrorLog
+
+{{> excel-open Path="LedgerPath"}}
+
+# 使用中の範囲を全行取得（1行目ヘッダ）
+Excel.ReadFromExcel.ReadAllCells Instance: Excel FirstLineIsHeader: True RangeValue=> Rows
+
+SET RowIndex TO 1
+LOOP FOREACH Row IN Rows
+    SET RowIndex TO RowIndex + 1
+    {{> run-cli Args="calc --a %Row[1]% --b %Row[2]%"}}
+
+    IF CliExit <> 0 THEN
+        {{> append-log Path="ErrorLog" Text="%Row[0]%: %CliErr%"}}
+    ELSE
+        {{> json-parse Into="Result"}}
+        Excel.WriteToExcel.WriteCell Instance: Excel Value: Result.value Column: $'''D''' Row: RowIndex
+    END
+END
+
+{{> excel-close-save}}

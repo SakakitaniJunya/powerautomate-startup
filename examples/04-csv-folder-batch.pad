@@ -1,0 +1,35 @@
+# ============================================================
+# 04 - フォルダ内の CSV を全部なめて一括処理（夜間バッチ想定）
+# ------------------------------------------------------------
+# InDir に投げられた CSV を順番に処理し、結果を SummaryOutPath へ集約。
+# 処理済みファイルは DoneDir へ移動。1 件の失敗で全体を止めない。
+# ============================================================
+#! requires: ExePath WorkDir InDir DoneDir SummaryOutPath ErrorLog
+
+{{> get-files Folder="InDir" Into="CsvFiles"}}
+
+IF CsvFiles.Count = 0 THEN
+    {{> info-dialog Title="対象なし" Message="$'''%InDir% に CSV がありません'''"}}
+    EXIT
+END
+
+{{> write-text Path="SummaryOutPath" Text="$'''file,name,result'''" AppendNewLine="True"}}
+
+LOOP FOREACH CsvFile IN CsvFiles
+    {{> read-csv Path="CsvFile" Into="Rows"}}
+
+    LOOP FOREACH Row IN Rows
+        {{> run-cli Args="calc --name \"%Row[0]%\" --v %Row[1]%"}}
+
+        IF CliExit <> 0 THEN
+            {{> append-log Path="ErrorLog" Text="%CsvFile% %Row[0]%: %CliErr%"}}
+        ELSE
+            {{> json-parse Into="Result"}}
+            {{> write-text Path="SummaryOutPath" Text="$'''%CsvFile%,%Row[0]%,%Result.value%'''" AppendNewLine="True" Mode="Append"}}
+        END
+    END
+
+    File.Move Files: CsvFile Destination: DoneDir IfFileExists: File.IfExists.DoNothing MovedFiles=> Moved
+END
+
+{{> info-dialog Title="バッチ完了" Message="$'''%CsvFiles.Count% 件の CSV を処理しました'''" Timeout="30"}}

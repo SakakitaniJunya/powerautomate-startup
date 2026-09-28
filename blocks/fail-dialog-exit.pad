@@ -1,0 +1,5 @@
+#! param Title default="エラー"
+#! param Message default="CliErr"
+# エラーダイアログを出してフロー終了 (IF CliExit <> 0 の中で使う)
+Display.ShowMessageDialog.ShowMessageWithTimeout Title: $'''{{Title}}''' Message: {{Message}} Icon: Display.Icon.Warning Buttons: Display.Buttons.OK DefaultButton: Display.DefaultButton.Button1 IsTopMost: False Timeout: 30
+EXIT

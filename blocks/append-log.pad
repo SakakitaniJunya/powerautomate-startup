@@ -1,0 +1,4 @@
+#! param Path
+#! param Text
+# テキストを UTF8 でファイルへ追記 (ログ用)
+File.WriteText File: {{Path}} TextToWrite: $'''{{Text}}''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8

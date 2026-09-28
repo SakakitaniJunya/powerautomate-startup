@@ -1,0 +1,34 @@
+# ============================================================
+# 07 - 実行の成否を色分けカードで Teams にアラート
+# ------------------------------------------------------------
+# mytool.exe の成否を Adaptive Card のスタイルで可視化する。
+#   成功 → style:"good"（緑帯）の完了カード
+#   失敗 → style:"attention"（赤帯）のエラーカード + stderr はログへ
+# WebhookUrl は 06 と同じくワークフロー webhook の URL を入れる。
+# ============================================================
+#! requires: ExePath WorkDir WebhookUrl LogPath
+
+SET JobName TO $'''日次バッチ'''
+
+{{> run-cli Args="run --job daily"}}
+
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+
+# --- 成否でカードを切替（色帯 + FactSet） ---
+IF CliExit = 0 THEN
+    {{> json-parse Into="Result"}}
+    SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[OK] %JobName% 完了","weight":"bolder","size":"medium"},{"type":"FactSet","facts":[{"title":"結果","value":"%Result.value%"},{"title":"時刻","value":"%Now%"}]},{"type":"Container","style":"good","items":[{"type":"TextBlock","text":"正常終了しました","wrap":true}]}]}}]}'''
+ELSE
+    # stderr は JSON 破壊文字を含み得るのでカードには入れずログへ
+    {{> append-log Path="LogPath" Text="%Now% [ERROR] %JobName% exit=%CliExit% stderr=%CliErr%"}}
+    SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[ERROR] %JobName% 失敗","weight":"bolder","size":"medium","color":"attention"},{"type":"FactSet","facts":[{"title":"終了コード","value":"%CliExit%"},{"title":"時刻","value":"%Now%"},{"title":"ログ","value":"out\\flow.log"}]},{"type":"Container","style":"attention","items":[{"type":"TextBlock","text":"詳細はログファイルを確認してください","wrap":true}]}]}}]}'''
+END
+
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+
+IF (WebStatus < 200) OR (WebStatus > 299) THEN
+    {{> warn-dialog Title="Teams 通知失敗" Message="$'''HTTP %WebStatus% : %WebResponse%'''" Timeout="30"}}
+    EXIT
+END
+
+{{> info-dialog Title="完了" Message="$'''通知しました (HTTP %WebStatus%)'''"}}

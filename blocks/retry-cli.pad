@@ -1,0 +1,14 @@
+#! param Args
+#! param LogPath
+#! param MaxRetry default="3"
+# CLI を CliExit が 0 になるか MaxRetry 回までリトライ (失敗ごとに LogPath へ追記)
+SET RetryCount TO 0
+SET CliExit TO -1
+LOOP WHILE (CliExit <> 0) AND (RetryCount <= MaxRetry)
+    {{> run-cli Args="{{Args}}"}}
+    IF CliExit <> 0 THEN
+        {{> append-log Path="{{LogPath}}" Text="%Now% [ERROR] retry=%RetryCount% exit=%CliExit% stderr=%CliErr%"}}
+        SET RetryCount TO RetryCount + 1
+        WAIT 2
+    END
+END

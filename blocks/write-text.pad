@@ -1,0 +1,6 @@
+#! param Path
+#! param Text
+#! param Mode default="Overwrite"
+#! param AppendNewLine default="False"
+# ファイルへテキスト書き込み (Mode: Overwrite / Append)
+File.WriteText File: {{Path}} TextToWrite: {{Text}} AppendNewLine: {{AppendNewLine}} IfFileExists: File.IfFileExists.{{Mode}} Encoding: File.FileEncoding.UTF8

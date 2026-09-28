@@ -1,0 +1,4 @@
+#! param Path
+#! param Into
+# CSV (先頭行ヘッダ) をテーブルとして読み込む
+File.ReadFromCSVFile.ReadCSV CSVFile: {{Path}} Encoding: File.CSVEncoding.UTF8 TrimFields: True ColumnsSeparator: File.CSVColumnsSeparator.SystemDefault FirstLineContainsColumnNames: True CSVTable=> {{Into}}

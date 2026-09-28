@@ -1,0 +1,3 @@
+#! param Instance default="Excel"
+# Excel インスタンスを保存して閉じる
+Excel.CloseExcel.CloseAndSave Instance: {{Instance}}
