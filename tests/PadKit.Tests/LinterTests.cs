@@ -65,6 +65,15 @@ public class LinterTests
         yield return Case("PAD013",
             "Excel.CloseExcel.CloseAndSave Instance: Excel",
             "Excel.CloseExcel.Close Instance: Excel");
+        yield return Case("PAD014",
+            "SET B TO $'''{\"url\":\"out/dep_result.xlsx\"}'''",
+            "SET B TO $'''{\"url\":\"%OutputXlsx%\"}'''");
+        yield return Case("PAD015",
+            "IF ButtonPressed = 'Yes' THEN\nEND",
+            "IF ButtonPressed = Display.DialogResult.Yes THEN\nEND");
+        yield return Case("PAD016",
+            "DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now",
+            "DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateTime CurrentDateTime=> Now");
     }
 
     private static object[] Case(string id, string good, string bad) =>

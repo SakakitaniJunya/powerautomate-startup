@@ -1,0 +1,41 @@
+# ============================================================
+# 12 - 日次ダイジェスト（複数計算を ColumnSet 横並び1枚に集約）
+# ------------------------------------------------------------
+# 償却・法人税概算・源泉税を連続実行し、結果を KPI カード1枚に
+# まとめて投稿する。ColumnSet で3列横並びにするのがポイント。
+# 毎朝の定例レポート想定。
+# ============================================================
+#! requires: ExePath WorkDir WebhookUrl
+
+# --- 3 種の計算を順に実行（どれか失敗したら中断） ---
+{{> run-cli Args="dep schedule --method declining --cost 1000000 --life 10 --months 12"}}
+IF CliExit <> 0 THEN
+    {{> fail-dialog-exit Title="償却計算エラー" Message="CliErr"}}
+END
+{{> json-parse Into="Dep"}}
+
+{{> run-cli Args="tax corporate --income 10000000"}}
+IF CliExit <> 0 THEN
+    {{> fail-dialog-exit Title="法人税計算エラー" Message="CliErr"}}
+END
+{{> json-parse Into="Corp"}}
+
+{{> run-cli Args="tax withholding --amount 100000"}}
+IF CliExit <> 0 THEN
+    {{> fail-dialog-exit Title="源泉税計算エラー" Message="CliErr"}}
+END
+{{> json-parse Into="Wh"}}
+
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateOnly CurrentDateTime=> Today
+
+# --- KPI カード（ColumnSet で3列） ---
+SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"日次計算ダイジェスト — %Today%","weight":"bolder","size":"medium","color":"accent"},{"type":"ColumnSet","columns":[{"type":"Column","width":"auto","items":[{"type":"TextBlock","text":"初年度償却費","isSubtle":true,"wrap":true},{"type":"TextBlock","text":"%Dep.schedule[0].expense% 円","size":"extraLarge","weight":"bolder"},{"type":"TextBlock","text":"取得価額 %Dep.cost% 円","isSubtle":true,"wrap":true,"size":"small"}]},{"type":"Column","width":"auto","items":[{"type":"TextBlock","text":"法人税概算","isSubtle":true,"wrap":true},{"type":"TextBlock","text":"%Corp.total% 円","size":"extraLarge","weight":"bolder"},{"type":"TextBlock","text":"国税 %Corp.nationalTax% + 地方 %Corp.localCorporateTax%","isSubtle":true,"wrap":true,"size":"small"}]},{"type":"Column","width":"auto","items":[{"type":"TextBlock","text":"源泉所得税","isSubtle":true,"wrap":true},{"type":"TextBlock","text":"%Wh.tax% 円","size":"extraLarge","weight":"bolder"},{"type":"TextBlock","text":"支払額 %Wh.grossAmount% → 手取 %Wh.netPayment%","isSubtle":true,"wrap":true,"size":"small"}]}]},{"type":"Container","style":"emphasis","items":[{"type":"TextBlock","text":"fincalc.exe 日次レポート（自動投稿）","isSubtle":true,"size":"small"}]}]}}]}'''
+
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+
+IF (WebStatus < 200) OR (WebStatus > 299) THEN
+    {{> warn-dialog Title="Teams 通知失敗" Message="$'''HTTP %WebStatus% : %WebResponse%'''" Timeout="30"}}
+    EXIT
+END
+
+{{> info-dialog Title="完了" Message="$'''ダイジェストを Teams に投稿しました'''"}}

@@ -5,3 +5,10 @@ obj/
 *.local.json
 TestResults/
 out/
+
+# fincalc ローカル実行物・環境別プロファイル
+apps/fincalc/run/
+apps/fincalc/in/
+apps/fincalc/done/
+apps/fincalc/pad/profiles/dev.json
+__pycache__/

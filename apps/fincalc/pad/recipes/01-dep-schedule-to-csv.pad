@@ -1,0 +1,28 @@
+# ============================================================
+# 01 - fincalc.exe をキックして償却スケジュールを CSV 出力
+# ------------------------------------------------------------
+# 使い方: padkit render でテキスト生成 → PAD デザイナーに貼り付け。
+# アクション引数名は PAD バージョンで多少違うことがあるので、
+# 貼り付け後に赤枠が出たら当該アクションを開いて再設定する。
+# ============================================================
+#! requires: ExePath WorkDir OutPath
+
+# 減価償却スケジュール取得（定率法200% / 取得価額 / 耐用年数 / 初年度月数）
+SET Method TO $'''declining'''
+SET Cost TO 1000000
+SET Life TO 10
+SET FirstYearMonths TO 12
+
+{{> run-cli-or-exit Args="dep schedule --method %Method% --cost %Cost% --life %Life% --months %FirstYearMonths%" Into="Result"}}
+
+# schedule 配列を回して CSV 行を組み立て
+SET CsvLines TO $'''year,method,rate,expense,accumulated,bookValueEnd,isRevised
+'''
+LOOP FOREACH Row IN Result.schedule
+    SET CsvLines TO $'''%CsvLines%%Row.year%,%Row.method%,%Row.rate%,%Row.expense%,%Row.accumulated%,%Row.bookValueEnd%,%Row.isRevised%
+'''
+END
+
+{{> write-text Path="OutPath" Text="CsvLines"}}
+
+{{> info-dialog Title="完了" Message="$'''償却スケジュールを %OutPath% に出力しました'''"}}

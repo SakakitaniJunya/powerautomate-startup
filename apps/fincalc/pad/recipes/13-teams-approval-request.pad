@@ -1,0 +1,49 @@
+# ============================================================
+# 13 - 承認依頼フロー（依頼カード → Yes/No → 結果カード投稿）
+# ------------------------------------------------------------
+# 計算結果が閾値超え → Teams に「承認依頼」カード投稿 → ローカルの
+# Yes/No ダイアログで担当者判断 → 承認/差戻しの結果カードを投稿。
+# Workflows webhook は一方向なので、判断入力は PAD ダイアログで受け、
+# 結果を追記カードとして投稿する「疑似承認ループ」の雛形。
+# ============================================================
+#! requires: ExePath WorkDir WebhookUrl
+
+SET Threshold TO 1500000
+SET JobName TO $'''源泉徴収 一括計算'''
+
+{{> run-cli Args="tax withholding --amount 10000000"}}
+IF CliExit <> 0 THEN
+    {{> fail-dialog-exit Title="fincalc エラー" Message="CliErr"}}
+END
+{{> json-parse Into="Result"}}
+
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+
+IF Result.tax <= Threshold THEN
+    {{> info-dialog Title="承認不要" Message="$'''税額 %Result.tax% 円は閾値内のため承認依頼を出しません'''"}}
+    EXIT
+END
+
+# --- 1. 承認依頼カードを投稿 ---
+SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[承認依頼] %JobName%","weight":"bolder","size":"medium","color":"warning"},{"type":"FactSet","facts":[{"title":"支払総額","value":"%Result.grossAmount% 円"},{"title":"源泉税額","value":"%Result.tax% 円"},{"title":"手取額","value":"%Result.netPayment% 円"},{"title":"閾値","value":"%Threshold% 円"},{"title":"依頼時刻","value":"%Now%"}]},{"type":"Container","style":"warning","items":[{"type":"TextBlock","text":"閾値超過のため担当者の承認が必要です。続けて結果カードが投稿されます","wrap":true}]}]}}]}'''
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+
+# --- 2. 担当者に Yes/No を聞く ---
+Display.ShowMessageDialog.ShowMessage Title: $'''承認確認''' Message: $'''%JobName% : 税額 %Result.tax% 円（閾値 %Threshold% 円超過）を承認しますか？''' Icon: Display.Icon.Question Buttons: Display.Buttons.YesNo DefaultButton: Display.DefaultButton.Button2 IsTopMost: True ButtonPressed=> ButtonPressed
+
+# --- 3. 判断結果を追記カードで投稿 ---
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+IF ButtonPressed = 'Yes' THEN
+    SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[承認] %JobName%","weight":"bolder","size":"medium"},{"type":"FactSet","facts":[{"title":"源泉税額","value":"%Result.tax% 円"},{"title":"承認時刻","value":"%Now%"}]},{"type":"Container","style":"good","items":[{"type":"TextBlock","text":"担当者が承認しました","wrap":true}]}]}}]}'''
+ELSE
+    SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[差戻し] %JobName%","weight":"bolder","size":"medium","color":"attention"},{"type":"FactSet","facts":[{"title":"源泉税額","value":"%Result.tax% 円"},{"title":"差戻し時刻","value":"%Now%"}]},{"type":"Container","style":"attention","items":[{"type":"TextBlock","text":"担当者が差し戻しました。金額を確認してください","wrap":true}]}]}}]}'''
+END
+
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+
+IF (WebStatus < 200) OR (WebStatus > 299) THEN
+    {{> warn-dialog Title="Teams 通知失敗" Message="$'''HTTP %WebStatus% : %WebResponse%'''" Timeout="30"}}
+    EXIT
+END
+
+{{> info-dialog Title="完了" Message="$'''承認結果を Teams に投稿しました'''"}}

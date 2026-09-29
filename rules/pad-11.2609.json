@@ -102,6 +102,30 @@
       "pattern": "Excel\\.CloseExcel\\.Close\\b(?!AndSave)",
       "message": "Excel.CloseExcel.Close は未検証です (検証済みは CloseAndSave)",
       "fix": "Excel.CloseExcel.CloseAndSave を使う"
+    },
+    {
+      "id": "PAD014",
+      "severity": "warning",
+      "scope": "line",
+      "pattern": "\\{[^\\n]*\"[^\"\\n]*%[A-Za-z_][A-Za-z0-9_]*(Path|Dir|File|Xlsx|Csv|Log)[A-Za-z0-9_]*%[^\"\\n]*\"",
+      "message": "JSON 文字列内のパス系変数は \\\\\\\\ が不正エスケープになり webhook が 202 受理でも投稿を捨てます",
+      "fix": "out/result.xlsx のような / 区切りリテラルか file:/// URI を使う"
+    },
+    {
+      "id": "PAD015",
+      "severity": "error",
+      "scope": "code",
+      "pattern": "\\bDisplay\\.DialogResult\\.",
+      "message": "IF 条件で Display.DialogResult.XXX の enum 参照は貼り付け拒否されます",
+      "fix": "ButtonPressed = 'Yes' の文字列比較で判定する"
+    },
+    {
+      "id": "PAD016",
+      "severity": "warning",
+      "scope": "code",
+      "pattern": "DateTime\\.DateTimeFormat\\.(DateTime|Date)\\b",
+      "message": "DateTime.DateTimeFormat のメンバー名が不正な可能性があります (DateTime は非メンバー)",
+      "fix": "Date / DateOnly / DateAndTime のいずれかを使う"
     }
   ]
 }
