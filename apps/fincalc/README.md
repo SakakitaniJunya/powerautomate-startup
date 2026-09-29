@@ -1,7 +1,7 @@
 # fincalc — 減価償却・税計算モック（PAD 連携用）
 
-業務委託先の環境で Power Automate Desktop (PAD) から使う金融計算のモック一式。
-AI が使えない向こうの環境では、`fincalc.exe` を PAD の「DOS コマンドの実行」でキックし、
+Power Automate Desktop (PAD) から使う金融計算のサンプル一式。
+AI が使えない実行環境では、`fincalc.exe` を PAD の「DOS コマンドの実行」でキックし、
 stdout の JSON を PAD 側で parse して使う構成を想定。
 
 ## 構成
@@ -14,7 +14,7 @@ apps/fincalc/
 ├── tests/FinCalc.Tests/  xunit テスト（国税庁公表の計算例と突合済み）
 ├── pad/                  PAD フロー雛形（生成物 *.txt。手編集しない）
 │   ├── recipes/          レシピ（.pad = PAD テキスト + {{> block}} インクルード）
-│   └── profiles/         環境別プロファイル JSON（client=向こう用 / dev=こちら実機用）
+│   └── profiles/         環境別プロファイル JSON（client=配布先用サンプル / dev=本機用, gitignore）
 └── samples/              フローが読む入力サンプル（CSV + assets.xlsx）
 ```
 
@@ -74,12 +74,12 @@ dotnet run --project src/FinCalc.Cli -c Release -- dep schedule --method declini
   （既知ヘッダを持たないシートは自動で読み飛ばす）。
 - **1行の失敗で止まらない**: エラーは summary の error 列に記録され、他の行は処理される。
 
-## 向こうの環境への持ち込み手順
+## 実行環境への持ち込み手順
 
 1. **exe の持ち込み**: `dotnet publish src/FinCalc.Cli -c Release -r win-x64 --self-contained` で
-   単体 exe を作るか、向こうに .NET SDK/ランタイムがあればソースごと持って `dotnet build`。
+   単体 exe を作るか、対象環境に .NET SDK/ランタイムがあればソースごと持って `dotnet build`。
    持ち込みが難しければ PAD 側で同等計算を組むための仕様としてこのコードを参照する。
-2. **PAD フローの再現**: `pad/*.txt` を開き、内容をコピー → 向こうの PAD デザイナーで
+2. **PAD フローの再現**: `pad/*.txt` を開き、内容をコピー → 対象環境の PAD デザイナーで
    新規フローのアクションエリアに貼り付け。テキストがアクション列に復元される。
    - 環境ごとのパスは `pad/recipes/` + `pad/profiles/*.json` から `padkit render-all`
      で再生成する (`pad/README.md` 参照。`*.txt` は生成物で直接編集しない)。
@@ -88,7 +88,7 @@ dotnet run --project src/FinCalc.Cli -c Release -- dep schedule --method declini
 
 ### PAD テキスト形式の注意（PAD 11.2609.183.0 で貼り付け・実行まで実機検証済み）
 
-テンプレートは以下のバージョン依存ルールに合わせてある。向こうの PAD が別バージョンなら
+テンプレートは以下のバージョン依存ルールに合わせてある。PAD が別バージョンなら
 赤枠が出る場合がある（アクションを UI で開き直せば引数名が分かる）。
 これらのルールは `padkit lint` (rules/pad-11.2609.json) で機械的に検査できる。
 

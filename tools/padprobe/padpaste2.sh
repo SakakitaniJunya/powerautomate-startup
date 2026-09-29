@@ -1,8 +1,12 @@
 #!/bin/bash
+# このリポジトリのルートを自動解決 (Git Bash 前提)
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+ROOTW=$(cygpath -w "$ROOT" 2>/dev/null)
+ROOTWIN=${ROOTW//\\/\\\\}
 # usage: padpaste2.sh <filename-in-out-dir> [--keep]
 # clears flow (select all + cut), pastes, reports actions + error count
-OUTDIR='C:\Users\sakaj\projects\company-person\apps\fincalc\out'
-PROBE=/c/Users/sakaj/projects/company-person/tools/padprobe/bin/Release/net8.0-windows/PadProbe.exe
+OUTDIR="${ROOTW}\apps\fincalc\out"
+PROBE=$ROOT/tools/padprobe/bin/Release/net8.0-windows/PadProbe.exe
 
 # clear
 "$PROBE" clickname designer "編集" >/dev/null

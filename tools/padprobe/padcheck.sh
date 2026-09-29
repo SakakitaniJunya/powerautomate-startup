@@ -1,6 +1,10 @@
 #!/bin/bash
+# このリポジトリのルートを自動解決 (Git Bash 前提)
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+ROOTW=$(cygpath -w "$ROOT" 2>/dev/null)
+ROOTWIN=${ROOTW//\\/\\\\}
 # usage: padcheck.sh <pad-template-file>  — clears flow, pastes, reports actions+errors+first error text
-PROBE=/c/Users/sakaj/projects/company-person/tools/padprobe/bin/Release/net8.0-windows/PadProbe.exe
+PROBE=$ROOT/tools/padprobe/bin/Release/net8.0-windows/PadProbe.exe
 F="$1"
 
 # clear existing actions

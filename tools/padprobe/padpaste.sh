@@ -1,7 +1,11 @@
 #!/bin/bash
+# このリポジトリのルートを自動解決 (Git Bash 前提)
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+ROOTW=$(cygpath -w "$ROOT" 2>/dev/null)
+ROOTWIN=${ROOTW//\\/\\\\}
 # usage: padpaste.sh <filename-in-out-dir> [--keep]
-OUTDIR='C:\Users\sakaj\projects\company-person\apps\fincalc\out'
-PROBE=/c/Users/sakaj/projects/company-person/tools/padprobe/bin/Release/net8.0-windows/PadProbe.exe
+OUTDIR="${ROOTW}\apps\fincalc\out"
+PROBE=$ROOT/tools/padprobe/bin/Release/net8.0-windows/PadProbe.exe
 powershell -NoProfile -Command "Set-Clipboard -Value ([IO.File]::ReadAllText('$OUTDIR\\$1'))" || exit 1
 sleep 0.3
 count=0

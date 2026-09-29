@@ -3,8 +3,8 @@
 `recipes/*.pad` (padkit レシピ) から `padkit render-all` で生成した PAD フローテキスト。
 `*.txt` は生成物なので直接編集しない。
 
-- `profiles/client.json` — 委託先環境 (C:\work\fincalc)
-- `profiles/dev.json` — 開発環境 (このリポジトリのローカルパス)
+- `profiles/client.json` — 配布先用サンプル (C:\work\fincalc)
+- `profiles/dev.json` — 本機環境 (gitignore 対象、`dev.json.example` をコピーして作成)
 - `profiles/dev.local.json` — ローカル秘密値オーバーレイ (gitignore 対象、未コミット。
   `dev.local.json.example` をコピーして実 WebhookUrl を入れる)
 

@@ -1,0 +1,17 @@
+{
+  "ExePath": "C:\\tools\\fincalc\\fincalc.exe",
+  "WorkDir": "C:\\tools\\fincalc",
+  "OutPath": "C:\\tools\\fincalc\\out\\dep_schedule.csv",
+  "WhOutPath": "C:\\tools\\fincalc\\out\\withholding.csv",
+  "SummaryOutPath": "C:\\tools\\fincalc\\out\\all_assets_summary.csv",
+  "InPath": "C:\\tools\\fincalc\\samples\\fees.csv",
+  "CsvPath": "C:\\tools\\fincalc\\samples\\invoice_lines.csv",
+  "LedgerPath": "C:\\tools\\fincalc\\samples\\assets.xlsx",
+  "InDir": "C:\\tools\\fincalc\\in",
+  "DoneDir": "C:\\tools\\fincalc\\done",
+  "InputXlsx": "C:\\tools\\fincalc\\in\\assets.xlsx",
+  "OutputXlsx": "C:\\tools\\fincalc\\out\\dep_result.xlsx",
+  "LogPath": "C:\\tools\\fincalc\\out\\flow.log",
+  "ErrorLog": "C:\\tools\\fincalc\\out\\errors.log",
+  "WebhookUrl": "https://example.webhook.office.com/webhookb2/xxxxx"
+}

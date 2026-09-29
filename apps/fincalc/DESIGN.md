@@ -1,16 +1,16 @@
 # fincalc 設計書 — PAD 連携・金融計算ツールキット
 
-> **TL;DR**: AI 不可の委託先環境で PwC 系金融計算を PAD 自動化する一式。
+> **TL;DR**: AI が使えない実行環境へ持ち込む金融計算 PAD 自動化の一式。
 > 計算は C# exe、PAD フローはレシピ→テキスト生成、通知は既存 Teams の
 > Workflows webhook。生成/検査の padkit は同 repo (repo ルート)。
 
-> 対象版: apps/fincalc + tools/padprobe + padkit(repo ルート src/) 構成
+> 対象版: apps/fincalc + padkit(repo ルート src/) 構成
 > 対象環境: Windows 11 / PAD 11.2609.183.0 / .NET 8 / 新 Teams
 
 ## 1. 目的・背景
 
-業務委託案件（PwC 系の金融計算）を Power Automate Desktop (PAD) で自動化するにあたり、
-**クライアント環境で AI が使えない**制約がある。このため:
+金融計算の日次/月次作業を Power Automate Desktop (PAD) で自動化するにあたり、
+**実行環境で AI が使えない**制約がある。このため:
 
 - 計算ロジックは AI に依存せず C# 製 exe (fincalc.exe) に閉じ込める
 - PAD フローはテキスト形式で持ち込み、貼り付けで復元できるようにする
@@ -40,10 +40,10 @@
 | 層 | 担当 | 理由 |
 |---|---|---|
 | 計算 | fincalc.exe (C#) | 利率表・端数処理を単体テストで担保。PAD には載せない |
-| 手順 | PAD フロー (.pad → .txt) | クライアント標準ツール。テキスト管理で再現可能 |
+| 手順 | PAD フロー (.pad → .txt) | 実行環境の標準ツール。テキスト管理で再現可能 |
 | 通知 | Teams Workflows webhook | 既存チャネル。API キー・クラウドフロー不要 |
 | 生成/検査 | padkit (同 repo) | バージョン依存構文をルール化し生成物を機械検査 |
-| 検証自動化 | tools/padprobe → padkit designer | UIA3 で PAD を外から操作 |
+| 検証自動化 | padkit designer | UIA3 で PAD を外から操作 |
 
 ## 3. コンポーネント設計
 
@@ -77,16 +77,17 @@
 
 - ソースは `pad/recipes/*.pad` (padkit レシピ)。生成物 `pad/*.txt` は編集禁止
 - 環境値は `pad/profiles/*.json` に集約 (`#! requires:` キーが SET 行に展開される)
-  - `client.json` = 委託先 (`C:\work\fincalc`) / `dev.json` = 本機
+  - `client.json` = 配布先用サンプル (`C:\work\fincalc`) /
+    `dev.json` = 本機 (gitignore。`dev.json.example` からコピー)
   - `dev.local.json` = 秘密値オーバーレイ (gitignore。`--profile dev --profile dev.local` で後勝ち)
 - 15 テンプレートの用途は `pad/README.md` の一覧表参照
 
-### 3.5 tools/padprobe
+### 3.5 padkit designer (検証自動化)
 
-- FlaUI (UIA3) で PAD/Teams を外から操作する検証用コンソール
-  (padkit designer コマンドの原型。プロセス名指定 dump/click/keys 等)
+- padkit の `designer` サブコマンド (FlaUI / UIA3) で PAD を外から操作する
 - PAD 11.2609 の AutomationId は実測で固定済み
-  (`ProgramItemsListBoxActions`, `ErrorCountTextBlock`, `Flow_status_*` 等)
+  (`ProgramItemsListBoxActions`, `ErrorCountTextBlock`, `Flow_status_*` 等。
+  一覧は repo ルートの README / docs/design.md 参照)
 
 ## 4. インターフェース仕様
 
@@ -123,7 +124,7 @@
   → `\U` 等が不正エスケープになり同様にサイレント廃棄される。
   stderr も直接埋め込まず終了コードのみ載せる
 - URL は sig 付き秘密情報。コミット側はプレースホルダ、実値は gitignore 対象
-  (`profiles/dev.local.json` / `run/`) のみ (REQ-207)
+  (`profiles/dev.local.json` / `run/`) のみ
 
 ## 5. 品質保証
 
@@ -135,11 +136,11 @@
 | 実行 | `padkit designer run` — 保存→実行→`Flow_status_ready` 遷移を監視 |
 | Teams | 実チャネル投稿を UIA で確認 (08-15 全件 投稿済) |
 
-## 6. 委託先への持ち込みフロー
+## 6. 実行環境への持ち込みフロー
 
 1. fincalc.exe を `dotnet publish -r win-x64 --self-contained` で単体 exe 化して持ち込み
    (または .NET SDK 環境で `dotnet build`)
-2. `profiles/client.json` を向こうのパス/WebhookUrl に編集
+2. `profiles/client.json` を配布先のパス/WebhookUrl に編集
 3. `padkit render-all recipes --profile client.json --out-dir pad`
 4. PAD デザイナーに `pad/*.txt` を貼り付け (手動 or `padkit designer check/paste`)
 5. 実行前に `padkit lint` + `designer check` で検査

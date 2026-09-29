@@ -1,6 +1,10 @@
 #!/bin/bash
+# このリポジトリのルートを自動解決 (Git Bash 前提)
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+ROOTW=$(cygpath -w "$ROOT" 2>/dev/null)
+ROOTWIN=${ROOTW//\\/\\\\}
 # usage: padrun.sh <file> — clear+paste, if errors==0 save & run, wait until started & finished
-PROBE=/c/Users/sakaj/projects/company-person/tools/padprobe/bin/Release/net8.0-windows/PadProbe.exe
+PROBE=$ROOT/tools/padprobe/bin/Release/net8.0-windows/PadProbe.exe
 res=$(bash padtest.sh "$1" 2>/dev/null | tail -1)
 echo "$res"
 echo "$res" | grep -q "errors=0" || { echo "SKIP-RUN (errors present)"; exit 1; }

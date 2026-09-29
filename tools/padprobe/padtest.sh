@@ -1,7 +1,11 @@
 #!/bin/bash
+# このリポジトリのルートを自動解決 (Git Bash 前提)
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+ROOTW=$(cygpath -w "$ROOT" 2>/dev/null)
+ROOTWIN=${ROOTW//\\/\\\\}
 # usage: padtest.sh <file> — reliable clear (repeat until 0), paste, report actions+errors
-OUTDIR='C:\Users\sakaj\projects\company-person\apps\fincalc\out'
-PROBE=/c/Users/sakaj/projects/company-person/tools/padprobe/bin/Release/net8.0-windows/PadProbe.exe
+OUTDIR="${ROOTW}\apps\fincalc\out"
+PROBE=$ROOT/tools/padprobe/bin/Release/net8.0-windows/PadProbe.exe
 for i in 1 2 3 4 5; do
   n=$("$PROBE" dump designer 12 2>/dev/null | grep -A9 "ProgramDetailsStatusBarItem" | grep -oE "'[0-9]+ " | head -2 | tail -1 | tr -dc 0-9)
   [ "$n" = "0" ] && break
