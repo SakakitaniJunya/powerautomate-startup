@@ -1,0 +1,41 @@
+# ============================================================
+# 14 - 実行監視（開始/終了の2段カードでジョブをトレース）
+# ------------------------------------------------------------
+# 長時間ジョブの開始と終了をそれぞれカード投稿して、Teams 上で
+# 「いつ始まり・いつ終わり・成否どうだったか」を遡れるようにする。
+# 夜間バッチ・大量行処理の監視用。終了カードに終了コードを載せる。
+# ============================================================
+#! requires: ExePath WorkDir WebhookUrl InputXlsx OutputXlsx
+
+SET JobName TO $'''資産台帳 一括償却バッチ'''
+
+# --- 1. 開始カード ---
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> StartTime
+SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"▶ %JobName% 開始","weight":"bolder","size":"medium"},{"type":"FactSet","facts":[{"title":"入力","value":"in/assets.xlsx"},{"title":"開始時刻","value":"%StartTime%"}]},{"type":"Container","style":"emphasis","items":[{"type":"TextBlock","text":"実行中…終了時に続報を投稿します","isSubtle":true,"wrap":true}]}]}}]}'''
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+
+IF (WebStatus < 200) OR (WebStatus > 299) THEN
+    {{> warn-dialog Title="Teams 通知失敗" Message="$'''HTTP %WebStatus% : %WebResponse%'''" Timeout="30"}}
+    EXIT
+END
+
+# --- 2. 本処理 ---
+{{> run-cli Args="excel dep-batch --input \"%InputXlsx%\" --sheet \"*\" --output \"%OutputXlsx%\""}}
+
+# --- 3. 終了カード（成否で色分け） ---
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> EndTime
+IF CliExit = 0 THEN
+    {{> json-parse Into="Batch"}}
+    SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"■ %JobName% 終了","weight":"bolder","size":"medium"},{"type":"FactSet","facts":[{"title":"開始","value":"%StartTime%"},{"title":"終了","value":"%EndTime%"},{"title":"成功","value":"%Batch.okCount% 件"},{"title":"エラー","value":"%Batch.errorCount% 件"},{"title":"出力","value":"out/dep_result.xlsx"}]},{"type":"Container","style":"good","items":[{"type":"TextBlock","text":"ジョブが正常終了しました","wrap":true}]}]}}]}'''
+ELSE
+    SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"■ %JobName% 異常終了","weight":"bolder","size":"medium","color":"attention"},{"type":"FactSet","facts":[{"title":"開始","value":"%StartTime%"},{"title":"終了","value":"%EndTime%"},{"title":"終了コード","value":"%CliExit%"}]},{"type":"Container","style":"attention","items":[{"type":"TextBlock","text":"ログを確認してください","wrap":true}]}]}}]}'''
+END
+
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+
+IF (WebStatus < 200) OR (WebStatus > 299) THEN
+    {{> warn-dialog Title="Teams 通知失敗" Message="$'''HTTP %WebStatus% : %WebResponse%'''" Timeout="30"}}
+    EXIT
+END
+
+{{> info-dialog Title="完了" Message="$'''実行監視カードを投稿しました'''"}}

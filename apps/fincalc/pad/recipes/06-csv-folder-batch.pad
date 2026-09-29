@@ -1,0 +1,36 @@
+# ============================================================
+# 06 - フォルダ内の CSV を全部なめて一括処理（夜間バッチ想定）
+# ------------------------------------------------------------
+# in/ に投げられた資産 CSV を順番に処理し、結果を out/ に集約。
+# 処理済みファイルは done/ へ移動。1 件の失敗で全体を止めない。
+# ============================================================
+#! requires: ExePath WorkDir InDir DoneDir SummaryOutPath ErrorLog
+
+{{> get-files Folder="InDir" Into="CsvFiles"}}
+
+IF CsvFiles.Count = 0 THEN
+    {{> info-dialog Title="対象なし" Message="$'''%InDir% に CSV がありません'''"}}
+    EXIT
+END
+
+{{> write-text Path="SummaryOutPath" Text="$'''file,asset,cost,life,method,year1Expense'''" AppendNewLine="True"}}
+
+LOOP FOREACH CsvFile IN CsvFiles
+    {{> read-csv Path="CsvFile" Into="Assets"}}
+
+    LOOP FOREACH Asset IN Assets
+        # Asset[0]=資産名 Asset[1]=取得価額 Asset[2]=耐用年数 Asset[3]=償却方法 Asset[4]=供用月数
+        {{> run-cli Args="dep schedule --method %Asset[3]% --cost %Asset[1]% --life %Asset[2]% --months %Asset[4]%"}}
+
+        IF CliExit <> 0 THEN
+            {{> append-log Path="ErrorLog" Text="%CsvFile% %Asset[0]%: %CliErr%"}}
+        ELSE
+            {{> json-parse Into="Result"}}
+            {{> write-text Path="SummaryOutPath" Text="$'''%CsvFile%,%Asset[0]%,%Result.cost%,%Result.usefulLifeYears%,%Result.method%,%Result.schedule[0].expense%'''" AppendNewLine="True" Mode="Append"}}
+        END
+    END
+
+    File.Move Files: CsvFile Destination: DoneDir IfFileExists: File.IfExists.DoNothing MovedFiles=> Moved
+END
+
+{{> info-dialog Title="バッチ完了" Message="$'''%CsvFiles.Count% 件の CSV を処理しました'''" Timeout="30"}}

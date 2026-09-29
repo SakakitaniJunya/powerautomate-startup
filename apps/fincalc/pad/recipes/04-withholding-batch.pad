@@ -1,0 +1,27 @@
+# ============================================================
+# 04 - 報酬 CSV を読んで源泉所得税を一括計算 → 結果 CSV
+# ------------------------------------------------------------
+# 想定する CSV (先頭行ヘッダ): payee,amount
+# 出力 CSV: payee,gross,tax,netPayment
+# ============================================================
+#! requires: ExePath WorkDir InPath WhOutPath ErrorLog
+
+{{> read-csv Path="InPath" Into="Fees"}}
+
+SET OutCsv TO $'''payee,gross,tax,netPayment'''
+LOOP FOREACH Fee IN Fees
+    # Fee[0]=payee, Fee[1]=amount
+    {{> run-cli Args="tax withholding --amount %Fee[1]%"}}
+
+    IF CliExit <> 0 THEN
+        {{> append-log Path="ErrorLog" Text="%Fee[0]%: %CliErr%"}}
+    ELSE
+        {{> json-parse Into="Wh"}}
+        SET OutCsv TO $'''%OutCsv%
+%Fee[0]%,%Wh.grossAmount%,%Wh.tax%,%Wh.netPayment%'''
+    END
+END
+
+{{> write-text Path="WhOutPath" Text="OutCsv"}}
+
+{{> info-dialog Title="完了" Message="$'''%WhOutPath% に出力しました'''"}}

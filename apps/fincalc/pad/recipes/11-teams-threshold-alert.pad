@@ -1,0 +1,35 @@
+# ============================================================
+# 11 - 閾値アラート（計算結果が閾値超え → Teams に警告カード）
+# ------------------------------------------------------------
+# 税額・償却費などの計算結果が Threshold を超えたときだけ
+# attention カードを飛ばす監視型の雛形。範囲内なら good カード。
+# 「投稿は閾値超過時だけにしたい」場合は ELSE 側の Body 組み立てと
+# POST を IF の中にだけ残せばよい。
+# ============================================================
+#! requires: ExePath WorkDir WebhookUrl
+
+SET Threshold TO 3000000
+SET Income TO 10000000
+
+{{> run-cli Args="tax corporate --income %Income%"}}
+IF CliExit <> 0 THEN
+    {{> fail-dialog-exit Title="fincalc エラー" Message="CliErr"}}
+END
+{{> json-parse Into="Result"}}
+
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+
+IF Result.total > Threshold THEN
+    SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[ALERT] 法人税概算が閾値超過","weight":"bolder","size":"medium","color":"attention"},{"type":"FactSet","facts":[{"title":"課税所得","value":"%Income% 円"},{"title":"税額合計","value":"%Result.total% 円"},{"title":"閾値","value":"%Threshold% 円"},{"title":"時刻","value":"%Now%"}]},{"type":"Container","style":"attention","items":[{"type":"TextBlock","text":"納税資金の手当てを確認してください","wrap":true}]}]}}]}'''
+ELSE
+    SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[OK] 法人税概算は閾値内","weight":"bolder","size":"medium"},{"type":"FactSet","facts":[{"title":"課税所得","value":"%Income% 円"},{"title":"税額合計","value":"%Result.total% 円"},{"title":"閾値","value":"%Threshold% 円"},{"title":"時刻","value":"%Now%"}]},{"type":"Container","style":"good","items":[{"type":"TextBlock","text":"正常範囲内です","wrap":true}]}]}}]}'''
+END
+
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+
+IF (WebStatus < 200) OR (WebStatus > 299) THEN
+    {{> warn-dialog Title="Teams 通知失敗" Message="$'''HTTP %WebStatus% : %WebResponse%'''" Timeout="30"}}
+    EXIT
+END
+
+{{> info-dialog Title="完了" Message="$'''閾値判定結果を Teams に投稿しました'''"}}

@@ -5,3 +5,9 @@ obj/
 *.local.json
 TestResults/
 out/
+
+# fincalc ローカル実行物
+apps/fincalc/run/
+apps/fincalc/in/
+apps/fincalc/done/
+__pycache__/

@@ -1,0 +1,26 @@
+# ============================================================
+# 05 - エラーハンドリング・リトライ・ログの共通パターン
+# ------------------------------------------------------------
+# fincalc.exe キック部分を「失敗してもリトライする」形にする雛形。
+# 他のレシピの run-cli 部分をこれに置き換えて使う。
+#   - LOOP WHILE : CliExit が 0 になるか MaxRetry 回まで回す
+#   - IF CliExit <> 0 : exe が exit 2（計算エラー）を返した場合
+#   - File.WriteText : ログに追記（UTF8）
+# ============================================================
+#! requires: ExePath WorkDir LogPath
+
+SET MaxRetry TO 3
+
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+
+# リトライループ (retry-cli ブロック)
+{{> retry-cli Args="tax corporate --income 10000000" LogPath="LogPath" MaxRetry="MaxRetry"}}
+
+IF CliExit <> 0 THEN
+    {{> fail-dialog-exit Title="計算エラー" Message="CliErr"}}
+END
+
+{{> append-log Path="LogPath" Text="%Now% [INFO] 正常終了: %CliOut%"}}
+
+{{> json-parse Into="Result"}}
+{{> info-dialog Title="結果" Message="$'''法人税概算: 国税 %Result.nationalTax% / 地方 %Result.localCorporateTax% / 計 %Result.total%'''" Timeout="30"}}
