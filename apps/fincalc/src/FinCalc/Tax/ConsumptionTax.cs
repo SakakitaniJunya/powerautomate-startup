@@ -1,7 +1,7 @@
 namespace FinCalc.Tax;
 
 /// <summary>消費税計算。標準税率10% / 軽減税率8%。インボイス方式は税率ごとに1回の端数処理。</summary>
-public static class ConsumptionTax
+public sealed class ConsumptionTaxCalculator
 {
     public const decimal StandardRate = 0.10m;
     public const decimal ReducedRate = 0.08m;
@@ -11,7 +11,7 @@ public static class ConsumptionTax
     public sealed record InvoiceResult(IReadOnlyList<RateGroup> Groups, long NetTotal, long TaxTotal, long GrossTotal);
 
     /// <summary>税抜 → 税込（1明細）</summary>
-    public static TaxLine AddTax(long net, decimal rate, RoundMode round = RoundMode.Floor)
+    public TaxLine AddTax(long net, decimal rate, RoundMode round = RoundMode.Floor)
     {
         ValidateRate(rate);
         var tax = MoneyRound.Apply(net * rate, round);
@@ -19,7 +19,7 @@ public static class ConsumptionTax
     }
 
     /// <summary>税込 → 税抜（1明細）</summary>
-    public static TaxLine ExtractTax(long gross, decimal rate, RoundMode round = RoundMode.Floor)
+    public TaxLine ExtractTax(long gross, decimal rate, RoundMode round = RoundMode.Floor)
     {
         ValidateRate(rate);
         var net = MoneyRound.Apply(gross / (1m + rate), round);
@@ -29,7 +29,7 @@ public static class ConsumptionTax
     /// <summary>
     /// 適格請求書（インボイス）の税額計算: 税率ごとに課税標準を合計してから1回だけ端数処理。
     /// </summary>
-    public static InvoiceResult Invoice(IEnumerable<(long net, decimal rate)> lines, RoundMode round = RoundMode.Floor)
+    public InvoiceResult Invoice(IEnumerable<(long net, decimal rate)> lines, RoundMode round = RoundMode.Floor)
     {
         var groups = lines
             .GroupBy(l => l.rate)

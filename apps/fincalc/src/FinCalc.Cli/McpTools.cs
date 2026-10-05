@@ -38,7 +38,7 @@ public static class FinCalcMcpTools
             "declining" or "db200" => DepreciationMethod.DecliningBalance200,
             _ => throw new ArgumentException($"method は straight|declining: {method}")
         };
-        var rows = DepreciationCalculator.Schedule(cost, life, m, months, ParseRound(round));
+        var rows = new DepreciationCalculator().Schedule(cost, life, m, months, ParseRound(round));
         return ToJson(new { cost, usefulLifeYears = life, method = m.ToString(), schedule = rows });
     }
 
@@ -58,11 +58,11 @@ public static class FinCalcMcpTools
 
     [McpServerTool(Name = "tax_consumption"), Description("消費税: 税抜金額に税率(10|8)を掛けて税額と税込を返す")]
     public static string TaxConsumption(long net, decimal rate, string round = "floor") =>
-        ToJson(ConsumptionTax.AddTax(net, NormRate(rate), ParseRound(round)));
+        ToJson(new ConsumptionTaxCalculator().AddTax(net, NormRate(rate), ParseRound(round)));
 
     [McpServerTool(Name = "tax_consumption_net"), Description("消費税: 税込金額から税抜と税額を逆算する")]
     public static string TaxConsumptionNet(long gross, decimal rate, string round = "floor") =>
-        ToJson(ConsumptionTax.ExtractTax(gross, NormRate(rate), ParseRound(round)));
+        ToJson(new ConsumptionTaxCalculator().ExtractTax(gross, NormRate(rate), ParseRound(round)));
 
     [McpServerTool(Name = "tax_invoice"), Description(
         "適格請求書の消費税を税率別に集計。lines は JSON 配列文字列 '[{\"net\":333,\"rate\":10}]'")]
@@ -72,7 +72,7 @@ public static class FinCalcMcpTools
     {
         var parsed = JsonSerializer.Deserialize<List<Line>>(lines, Json)
             ?? throw new ArgumentException("lines の JSON が不正です");
-        var r = ConsumptionTax.Invoice(
+        var r = new ConsumptionTaxCalculator().Invoice(
             parsed.Select(l => (l.Net, NormRate(l.Rate))), ParseRound(round));
         return ToJson(r);
     }
@@ -80,12 +80,12 @@ public static class FinCalcMcpTools
     [McpServerTool(Name = "tax_withholding"), Description(
         "報酬・料金の源泉所得税（復興特別所得税込み: 100万以下10.21% / 超過分20.42%）")]
     public static string TaxWithholding([Description("支払金額（円・税込）")] long amount) =>
-        ToJson(WithholdingTax.ForFee(amount));
+        ToJson(new WithholdingTaxCalculator().ForFee(amount));
 
     [McpServerTool(Name = "tax_corporate"), Description(
         "法人税概算（中小法人: 所得800万以下15% / 超過23.2% + 地方法人税10.3%。住民税・事業税は含まない概算）")]
     public static string TaxCorporate([Description("課税所得（円）")] long income) =>
-        ToJson(CorporateTax.Estimate(income));
+        ToJson(new CorporateTaxCalculator().Estimate(income));
 
     [McpServerTool(Name = "excel_dep_batch"), Description(
         "資産台帳 xlsx を一括償却計算し結果 xlsx (summary+schedule) を出力。" +

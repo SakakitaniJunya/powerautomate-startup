@@ -9,7 +9,7 @@ public class TaxTests
     [Fact]
     public void ConsumptionTax_AddTax_10Percent()
     {
-        var r = ConsumptionTax.AddTax(1_000, ConsumptionTax.StandardRate);
+        var r = new ConsumptionTaxCalculator().AddTax(1_000, ConsumptionTaxCalculator.StandardRate);
         Assert.Equal(100, r.Tax);
         Assert.Equal(1_100, r.Gross);
     }
@@ -17,7 +17,7 @@ public class TaxTests
     [Fact]
     public void ConsumptionTax_AddTax_ReducedRate_Floor()
     {
-        var r = ConsumptionTax.AddTax(123, ConsumptionTax.ReducedRate, RoundMode.Floor);
+        var r = new ConsumptionTaxCalculator().AddTax(123, ConsumptionTaxCalculator.ReducedRate, RoundMode.Floor);
         Assert.Equal(9, r.Tax); // 123 × 0.08 = 9.84 → 切捨
         Assert.Equal(132, r.Gross);
     }
@@ -25,7 +25,7 @@ public class TaxTests
     [Fact]
     public void ConsumptionTax_ExtractTax()
     {
-        var r = ConsumptionTax.ExtractTax(1_100, ConsumptionTax.StandardRate);
+        var r = new ConsumptionTaxCalculator().ExtractTax(1_100, ConsumptionTaxCalculator.StandardRate);
         Assert.Equal(1_000, r.Net);
         Assert.Equal(100, r.Tax);
     }
@@ -34,7 +34,7 @@ public class TaxTests
     public void ConsumptionTax_Invoice_RoundsOncePerRate()
     {
         // 10%対象3行(各333)と8%対象2行(各111)。税率ごとに合計してから端数処理。
-        var r = ConsumptionTax.Invoice(new[]
+        var r = new ConsumptionTaxCalculator().Invoice(new[]
         {
             (333L, 0.10m), (333L, 0.10m), (333L, 0.10m),
             (111L, 0.08m), (111L, 0.08m),
@@ -55,7 +55,7 @@ public class TaxTests
     [InlineData(1_500_000, 204_200)] // 102,100 + 500,000×0.2042 = 102,100+102,100
     public void WithholdingTax_Fee(long gross, long expectedTax)
     {
-        var r = WithholdingTax.ForFee(gross);
+        var r = new WithholdingTaxCalculator().ForFee(gross);
         Assert.Equal(expectedTax, r.Tax);
         Assert.Equal(gross - expectedTax, r.NetPayment);
     }
@@ -66,7 +66,7 @@ public class TaxTests
     [InlineData(-1_000, 0)]
     public void CorporateTax_Estimate(long income, long expectedNational)
     {
-        var r = CorporateTax.Estimate(income);
+        var r = new CorporateTaxCalculator().Estimate(income);
         Assert.Equal(expectedNational, r.NationalTax);
         Assert.Equal(r.NationalTax + r.LocalCorporateTax, r.Total);
         Assert.Equal((long)Math.Floor(expectedNational * 0.103m), r.LocalCorporateTax);

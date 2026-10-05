@@ -6,8 +6,10 @@ namespace FinCalc.Excel;
 /// <summary>
 /// 資産台帳 Excel を一括処理し、償却スケジュール付きの結果ワークブックを出力する。
 /// 1行の失敗で全体を止めず、エラーは summary シートの error 列に記録する。
+/// 列名は <see cref="ColumnMap"/>、計算は <see cref="DepreciationCalculator"/> に委譲するため、
+/// 部署別フォーマット・償却方法の差し替えはコンストラクタ注入で行う。
 /// </summary>
-public static class DepBatch
+public sealed class DepreciationBatchProcessor
 {
     public sealed record SummaryRow(
         string Sheet, int Row, string Asset, long Cost, int Life, string Method,
@@ -15,7 +17,17 @@ public static class DepBatch
 
     public sealed record Result(IReadOnlyList<SummaryRow> Summary, int OkCount, int ErrorCount, string OutputPath);
 
-    public static Result Run(string inputPath, string? sheet, int? headerRow, string? outputPath)
+    private readonly ColumnMap _columns;
+    private readonly DepreciationCalculator _calculator;
+
+    public DepreciationBatchProcessor(
+        ColumnMap? columns = null, DepreciationCalculator? calculator = null)
+    {
+        _columns = columns ?? ColumnMap.Asset;
+        _calculator = calculator ?? DepreciationCalculator.Default;
+    }
+
+    public Result Run(string inputPath, string? sheet, int? headerRow, string? outputPath)
     {
         outputPath ??= Path.ChangeExtension(inputPath, ".result.xlsx");
 
@@ -29,8 +41,7 @@ public static class DepBatch
                 SheetReader.SheetRows rows;
                 try
                 {
-                    rows = SheetReader.Read(ws, headerRow,
-                        HeaderMap.AssetColumns.Values.SelectMany(a => a));
+                    rows = SheetReader.Read(ws, headerRow, _columns.AllHeaders);
                 }
                 catch (ArgumentException)
                 {
@@ -39,17 +50,17 @@ public static class DepBatch
 
                 foreach (var row in rows.Rows)
                 {
-                    var name = HeaderMap.Get(row, HeaderMap.AssetColumns, "name") ?? $"行{row.RowNumber}";
+                    var name = _columns.Get(row, "name") ?? $"行{row.RowNumber}";
                     try
                     {
-                        var cost = HeaderMap.ParseMoney(HeaderMap.Req(row, HeaderMap.AssetColumns, "cost"));
-                        var life = HeaderMap.ParseInt(HeaderMap.Req(row, HeaderMap.AssetColumns, "life"));
-                        var method = HeaderMap.ParseMethod(HeaderMap.Req(row, HeaderMap.AssetColumns, "method"));
-                        var months = HeaderMap.Get(row, HeaderMap.AssetColumns, "months") is { } m
+                        var cost = HeaderMap.ParseMoney(_columns.Req(row, "cost"));
+                        var life = HeaderMap.ParseInt(_columns.Req(row, "life"));
+                        var method = HeaderMap.ParseMethod(_columns.Req(row, "method"));
+                        var months = _columns.Get(row, "months") is { } m
                             ? HeaderMap.ParseInt(m) : 12;
-                        var round = HeaderMap.ParseRound(HeaderMap.Get(row, HeaderMap.AssetColumns, "round"));
+                        var round = HeaderMap.ParseRound(_columns.Get(row, "round"));
 
-                        var sched = DepreciationCalculator.Schedule(cost, life, method, months, round);
+                        var sched = _calculator.Schedule(cost, life, method, months, round);
                         foreach (var e in sched) schedules.Add((name, e));
 
                         summary.Add(new(rows.SheetName, row.RowNumber, name, cost, life,
@@ -115,4 +126,13 @@ public static class DepBatch
 
         wb.SaveAs(outputPath);
     }
+}
+
+/// <summary>既定構成での一括実行ショートカット（後方互換ファサード）。</summary>
+public static class DepBatch
+{
+    public static DepreciationBatchProcessor.Result Run(
+        string inputPath, string? sheet, int? headerRow, string? outputPath,
+        ColumnMap? columns = null) =>
+        new DepreciationBatchProcessor(columns).Run(inputPath, sheet, headerRow, outputPath);
 }

@@ -9,7 +9,13 @@ public enum Severity
 /// <summary>レンダリング時の診断 (行番号は 1 始まり、0 は行特定不能)。</summary>
 public sealed record Diagnostic(string Code, int Line, Severity Severity, string Message);
 
-public sealed record RenderResult(string Text, IReadOnlyList<Diagnostic> Diagnostics);
+/// <summary>`#! subflow` セクション 1 つぶんの出力。PAD の同名サブフロータブへ貼る本文。</summary>
+public sealed record SubflowOutput(string Name, string Text);
+
+/// <param name="Text">メインフロー (Main タブ) の本文。</param>
+/// <param name="Subflows">`#! subflow` セクションごとの本文 (定義順)。</param>
+public sealed record RenderResult(string Text, IReadOnlyList<SubflowOutput> Subflows,
+    IReadOnlyList<Diagnostic> Diagnostics);
 
 /// <summary>error 重大度の診断が 1 件以上あるときに Renderer が投げる例外。</summary>
 public sealed class RenderException : Exception

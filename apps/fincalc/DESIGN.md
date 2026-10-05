@@ -49,38 +49,66 @@
 
 ### 3.1 FinCalc (計算ライブラリ, net8.0)
 
-- `Depreciation/DepreciationCalculator` — 定額法・200%定率法(定率法→保証率切替・
-  改定償却率・均等償却)、償却率表内蔵、月割り (`months` 引数)、簿価1円まで
-- `Tax/*` — 消費税(10%/軽減8%, インボイス方式=税率別合計→端数処理)、
-  源泉所得税(復興特別所得税込 10.21% / 100万円超分 20.42%)、法人税概算
-- 計算例は国税庁公表値との突合を xunit で回帰 (`tests/FinCalc.Tests` 21 件)
+責務ごとのクラス構成。拡張は「新しいクラスを足す」だけで既存コードを触らない。
+
+- `Depreciation/IDepreciationStrategy` — 償却方法1種類ぶんのスケジュール生成。
+  実装: `StraightLineStrategy` (定額法) / `DecliningBalance200Strategy`
+  (200%定率法、償却保証額で改定償却率へ切替・均等償却)
+- `DepreciationStrategies` — 方法→戦略のレジストリ。`With(strategy)` で
+  部署独自の償却方法を差し込んだ別セットを作れる
+- `DepreciationCalculator` — 入力検証 + 戦略解決の窓口。
+  `DepreciationCalculator.Default` が既定構成の共有インスタンス
+- `Tax/*Calculator` — `ConsumptionTaxCalculator` (10%/軽減8%,
+  インボイス方式=税率別合計→端数処理)、`WithholdingTaxCalculator`
+  (10.21% / 100万円超分 20.42%)、`CorporateTaxCalculator` (概算)。
+  いずれもインスタンスクラスで、バッチ・CLI から注入される
+- `RateTable` — 耐用年数省令の償却率表 (定額法=算出式、定率法=別表第十)
+- 計算例は国税庁公表値との突合を xunit で回帰 (`tests/FinCalc.Tests` 24 件)
 
 ### 3.2 FinCalc.Excel (ClosedXML 0.105.1, Excel 本体不要)
 
 - `SheetReader` — シート走査。先頭10行以内から既知ヘッダ列を探索
   (タイトル行付きの複雑な帳票を吸収)。ヘッダ行は `--header-row` で手動指定可
-- `HeaderMap` — 列名エイリアス (資産名/asset, 取得価額/cost, 耐用年数/life,
-  償却方法/定額/定率/straight/declining, 供用月数, 端数処理)
-- `DepBatch` — `excel dep-batch`: 全シート横断→行ごと償却スケジュール→
-  summary(結果+error列)と schedule シートを出力。1行失敗で止めない
-- `InvoiceBatch` / `SampleWorkbook` — 請求集計 / サンプル生成
+- `ColumnMap` — 「論理名 → 許容ヘッダ名」の対応表を保持するインスタンス。
+  `ColumnMap.Asset` / `ColumnMap.Invoice` が既定、`WithOverrides` で差分合成
+- `ColumnMapSet.Load(path)` — 部署別の列対応 JSON を読む
+  (例: `columns/asset-columns.example.json`)。部署ごとにヘッダ名が
+  違っても JSON を配るだけでコード変更不要。CLI では `--columns` で指定
+- `HeaderMap` — 既定エイリアス表 + 値パーサ (金額/整数/償却方法/端数処理)
+- `DepreciationBatchProcessor` — `excel dep-batch` の本体。
+  `ColumnMap` と `DepreciationCalculator` をコンストラクタ注入。
+  全シート横断→行ごと償却→summary(結果+error列)と schedule シート出力
+- `InvoiceBatchProcessor` — 同型で請求集計 (`ConsumptionTaxCalculator` 注入)
+- `DepBatch` / `InvoiceBatch` — 既定構成の静的ファサード (後方互換)
+- `SampleWorkbook` — サンプル生成
 
 ### 3.3 FinCalc.Cli (fincalc.exe)
 
-- 引数 → 計算 → **stdout に JSON 1行**。エラーは **stderr + exit 2**
+- `Commands/ICommand` — サブコマンド1件の責務 (`Name` / `Usage` / `Run`)。
+  責務ごとのサブシナリオとして `Commands/` 配下に1機能1クラス
+- `CommandArgs` — `--key value` パース済み引数 + 共通バリデーション
+  (`Req/ReqInt/ReqRate/OptRound/LoadColumns`)
+- `CommandRegistry` — コマンド名→実装の解決。`With(command)` で拡張可能
+- `Program.cs` — 引数パースと `Resolve→Run→stdout JSON` のみを行う薄い層
+- `exit 0` + stdout=JSON → 成功。`exit 2` + stderr → 計算/引数エラー
   (PAD が `StandardOutput=>CliOut StandardError=>CliErr ExitCode=>CliExit` で受ける前提)
-- コマンド: `dep schedule` / `tax invoice|withholding|corporate` /
-  `excel dep-batch|invoice|read|sample` / `mcp` (JSON-RPC over stdio)
+- `mcp` コマンドは MCP stdio サーバー (`McpTools`) として起動
 - 計算失敗でも部分結果を JSON で返す設計 (バッチ系は okCount/errorCount)
 
 ### 3.4 PAD テンプレート (pad/recipes → pad/*.txt)
 
 - ソースは `pad/recipes/*.pad` (padkit レシピ)。生成物 `pad/*.txt` は編集禁止
+- **責務分割**: `#! subflow <名>` セクションで責務ごとに分離 (16 番が雛形)。
+  生成物は `名.txt` (Main) + `名.<サブフロー>.txt` に分割。PAD はサブフロー
+  定義をテキスト貼り付けできないため `padkit designer flow <main.txt>` が
+  タブ作成→本文貼付→Main 貼付→全体検査まで行う。サブフローは引数を持たず
+  変数はフロー全体共有 — 共有変数 (CliExit/Result/WebhookUrl) が事実上の
+  「引数/戻り値」として機能する設計
 - 環境値は `pad/profiles/*.json` に集約 (`#! requires:` キーが SET 行に展開される)
   - `client.json` = 配布先用サンプル (`C:\work\fincalc`) /
     `dev.json` = 本機 (gitignore。`dev.json.example` からコピー)
   - `dev.local.json` = 秘密値オーバーレイ (gitignore。`--profile dev --profile dev.local` で後勝ち)
-- 15 テンプレートの用途は `pad/README.md` の一覧表参照
+- 16 テンプレートの用途は `pad/README.md` の一覧表参照
 
 ### 3.5 padkit designer (検証自動化)
 
@@ -109,6 +137,7 @@
 | エラーブロック | `ON BLOCK ERROR` は貼付不可 → `LOOP WHILE`+`IF`+`WAIT` リトライ |
 | FOREACH | `LoopIndex` は生成されない → カウンタ変数 |
 | IF 条件 | enum 参照不可 (`Display.DialogResult.Yes` → `'Yes'` 文字列比較) |
+| サブフロー | `FUNCTION` ブロックは貼付不可 → `#! subflow` で `名.<Sub>.txt` を生成し `designer flow` でタブごと貼付。呼び出しは `CALL <名>` |
 
 これらは padkit `rules/pad-11.2609.json` として機械検査可能な形で保持。
 
@@ -130,7 +159,7 @@
 
 | 層 | 手段 |
 |---|---|
-| 計算 | xunit 21 件。国税庁公表の計算例と突合 (償却費・源泉税額等) |
+| 計算 | xunit 24 件。国税庁公表の計算例と突合 (償却費・源泉税額等) + 列対応・戦略拡張の回帰 |
 | レシピ → テキスト | padkit lint (rules/pad-11.2609.json) + GoldenTests (15 レシピ全件 0 指摘) |
 | PAD 適合 | `padkit designer check` — 実機デザイナーに貼付し actions>0 & errors=0 |
 | 実行 | `padkit designer run` — 保存→実行→`Flow_status_ready` 遷移を監視 |

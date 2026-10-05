@@ -126,6 +126,22 @@
       "pattern": "DateTime\\.DateTimeFormat\\.(DateTime|Date)\\b",
       "message": "DateTime.DateTimeFormat のメンバー名が不正な可能性があります (DateTime は非メンバー)",
       "fix": "Date / DateOnly / DateAndTime のいずれかを使う"
+    },
+    {
+      "id": "PAD017",
+      "severity": "error",
+      "scope": "code",
+      "pattern": "\\b(FUNCTION\\s+[A-Za-z_]|END\\s+FUNCTION)\\b",
+      "message": "FUNCTION ブロックは PAD にテキスト貼り付けできません (サブフロー定義はタブ UI が管理)",
+      "fix": "padkit レシピの #! subflow <名> でセクション分割し、designer flow でタブごとに貼り付ける"
+    },
+    {
+      "id": "PAD018",
+      "severity": "warning",
+      "scope": "code",
+      "pattern": "\\bCALL\\s+(?!Main\\b)[A-Za-z_][A-Za-z0-9_]*",
+      "message": "CALL でサブフローを呼んでいます。対応する <ファイル名>.<サブフロー名>.txt をタブへ貼らないと実行時エラーになります",
+      "fix": "padkit designer flow <main.txt> でサブフローごと一括チェックする"
     }
   ]
 }

@@ -1,0 +1,55 @@
+# ============================================================
+# 16 - サブフロー分割の雛形 (責務ごとに CALL で委譲する構成)
+# ------------------------------------------------------------
+# 09 と同じ「計算 → 成否で色分けカード投稿」を、責務ごとの
+# サブフローに分けた版。PAD のサブフローは引数を持たず変数は
+# フロー全体で共有される (OOP のメソッド分割に相当)。
+#
+#   Main         = 司令塔 (呼び出しと分岐のみ)
+#   RunCalc      = fincalc.exe 実行 → CliOut/CliErr/CliExit/Result
+#   NotifyOk     = 成功カードを投稿して完了ダイアログ
+#   NotifyError  = stderr をログへ落とし失敗カードを投稿
+#
+# 生成物: 16-subflow-teams.txt (Main) + 16-subflow-teams.<名>.txt
+# PAD 側: `padkit designer flow 16-subflow-teams.txt` が
+#   サブフロータブ作成→各本文貼付→Main 検証まで自動で行う。
+#   手動の場合はタブ「＋」で同名サブフローを作って本文を貼る。
+# ============================================================
+#! requires: ExePath WorkDir WebhookUrl LogPath
+
+SET JobName TO $'''減価償却バッチ'''
+
+# --- 責務ごとにサブフローへ委譲 ---
+CALL RunCalc
+IF CliExit = 0 THEN
+    CALL NotifyOk
+ELSE
+    CALL NotifyError
+END
+
+#! subflow RunCalc
+# fincalc.exe を実行し stdout JSON を Result へ。失敗判定は呼び側の責務。
+{{> run-cli Args="dep schedule --method declining --cost 1000000 --life 10 --months 12"}}
+IF CliExit = 0 THEN
+    {{> json-parse Into="Result"}}
+END
+
+#! subflow NotifyOk
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+SET LastIndex TO Result.schedule.Count - 1
+SET LastYear TO Result.schedule[LastIndex]
+SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[OK] %JobName% 完了","weight":"bolder","size":"medium"},{"type":"FactSet","facts":[{"title":"取得価額","value":"%Result.cost% 円"},{"title":"最終年償却費","value":"%LastYear.expense% 円"},{"title":"時刻","value":"%Now%"}]},{"type":"Container","style":"good","items":[{"type":"TextBlock","text":"正常終了しました","wrap":true}]}]}}]}'''
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+IF (WebStatus < 200) OR (WebStatus > 299) THEN
+    {{> warn-dialog Title="Teams 通知失敗" Message="$'''HTTP %WebStatus%'''" Timeout="30"}}
+    EXIT
+END
+{{> info-dialog Title="完了" Message="$'''%JobName% 正常終了 → Teams 通知済み'''"}}
+
+#! subflow NotifyError
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+# stderr は JSON 破壊文字を含み得るのでカードには入れずログへ
+{{> append-log Path="LogPath" Text="%Now% [ERROR] %JobName% exit=%CliExit% stderr=%CliErr%"}}
+SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[ERROR] %JobName% 失敗","weight":"bolder","size":"medium","color":"attention"},{"type":"FactSet","facts":[{"title":"終了コード","value":"%CliExit%"},{"title":"時刻","value":"%Now%"}]},{"type":"Container","style":"attention","items":[{"type":"TextBlock","text":"詳細はログファイルを確認してください","wrap":true}]}]}}]}'''
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+{{> warn-dialog Title="失敗" Message="$'''%JobName% が失敗しました (exit=%CliExit%)'''" Timeout="30"}}

@@ -70,8 +70,8 @@ padkit render <recipe.pad> --profile <p.json> [--profile <p2.json>]... [--out <f
 padkit render-all <recipes-dir> --profile <p.json> [--profile <p2.json>]... --out-dir <dir> [--blocks <dir>]
 padkit lint <file>... [--rules <json>] [--json]
 padkit blocks [--blocks <dir>]
-padkit designer windows | status | dump [--depth N] | clear | paste <file>
-                | check <file>... | run <file> [--timeout <sec>] [--json]
+padkit designer windows | status | subflows | dump [--depth N] | clear | paste <file>
+                | check <file>... | flow <main.txt> | run <file> [--timeout <sec>] [--json]
 ```
 
 - `render`: レシピ 1 件をレンダリング。`--out` 無しなら stdout。lint 指摘は stderr。
@@ -83,6 +83,10 @@ padkit designer windows | status | dump [--depth N] | clear | paste <file>
 - `blocks`: 解決可能なブロックと引数の一覧。
 - `designer check`: `クリア → 貼り付け → アクション数/エラー数` をファイルごとに
   `name: actions=N errors=M` で出力 (エラーがあれば本文を最大 12 件表示、exit 1)。
+- `designer flow <main.txt>`: 兄弟ファイル `<main>.<Sub>.txt` をサブフローとして
+  扱い、タブ未作成なら「新規」ダイアログ経由で作成 → 各本文を貼り付け →
+  最後に Main を貼って全体エラー数で判定する (サブフロー単体の貼り付け時は
+  共有変数が未定義のため途中エラーが出るが、Main 貼付後に解消される)。
 - `designer run`: check → errors=0 なら保存 → 実行 → `run: started=… finished=…` を出力。
   エラー時は実行せず exit 2。
 
@@ -101,6 +105,12 @@ padkit designer windows | status | dump [--depth N] | clear | paste <file>
 - ブロック内の `{{key}}` が引数参照。展開後に残った `{{...}}` は E_UNRESOLVED エラー。
 - ブロックファイル先頭の `#! param <Name>` / `#! param <Name> default="..."` が引数宣言
   (default 無しは必須)。`#!` 行は本文から除去される。
+- `#! subflow <Name>` (本文中のみ有効): ここから次の subflow 宣言か EOF までが
+  サブフロー `<Name>` の本文。メインは最初の宣言より前の部分。
+  生成物は `<名>.txt` (Main 用) + `<名>.<Sub>.txt` (各サブフロー用) に分割され、
+  `designer flow` がタブ作成から貼り付けまで行う。PAD のサブフローは引数を持たず
+  変数はフロー全体で共有されるため、レシピ側の `SET` で渡す値を決めておく。
+  `CALL <Name>` は宣言済みサブフロー名と照合される (未定義=エラー、未呼出=警告)。
 - ブロック探索順: `<レシピのdir>/blocks/` → `--blocks` → padkit 同梱 `blocks/`
   (`PADKIT_BLOCKS` 環境変数、未設定なら exe から上へ `blocks/`+`PadKit.sln` の親を探索)。
 - プロファイル = JSON オブジェクト 1 枚。値は生の Windows パス (`C:\work` を
@@ -128,6 +138,8 @@ scope: `code` = `$'''...'''` の外側、`string` = 内側、`line` = 行全体�
 | PAD014 | warning | string | JSON 内の `%Path系変数%` (`\\` が不正エスケープ→投稿が黙って捨てられる) | `/` 区切りリテラルか `file:///` URI |
 | PAD015 | error | code | `Display.DialogResult.X` を IF 条件で参照 (貼り付け拒否) | `ButtonPressed = 'Yes'` の文字列比較 |
 | PAD016 | warning | code | `DateTime.DateTimeFormat.DateTime` / `.Date` 単体 | `Date`/`DateOnly`/`DateAndTime` を使う |
+| PAD017 | error | code | `FUNCTION ...` / `END FUNCTION` (貼り付け不可) | `#! subflow` で分割し `designer flow` で貼る |
+| PAD018 | warning | code | `CALL <Sub>` (対応するサブフロータブが必要) | `designer flow <main.txt>` で一括チェック |
 | PAD100 | error | — | IF/LOOP と END の不対応、IF 外の ELSE、迷子 END (C# 実装) | 構造修正 |
 | PAD101 | error | — | 未解決の `{{` 残留 (C# 実装) | 引数を直す |
 
@@ -157,6 +169,9 @@ scope: `code` = `$'''...'''` の外側、`string` = 内側、`line` = 行全体�
 | `SaveDraftFlowButton` | ドラフト保存ボタン |
 | `StartFlowButton` / `StopFlowButton` | 実行/停止 |
 | `EmptyState` | 空キャンバス中央のオーバーレイ (クリックの当たり判定に注意) |
+| `SubflowTabControl` | サブフロータブ領域 (子の TabItem = Main + 各サブフロー) |
+| `FunctionsAreaViewNewSubFlowButton` | 「新規」サブフロー作成ボタン |
+| `SubFlowNameTextBox` / `SubFlowEditDataTemplateOKButton` | サブフロー追加ダイアログの名前列/保存 |
 
 注意: キャンバス中央は EmptyState オーバーレイでフォーカスが取れないため、
 `FocusCanvas` はキャンバス上部 (top+80px) をクリックする実装になっている

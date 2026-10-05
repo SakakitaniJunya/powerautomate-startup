@@ -4,9 +4,19 @@ using FinCalc.Tax;
 namespace FinCalc.Excel;
 
 /// <summary>請求明細 Excel を税率別に集計し、結果シートを出力する。</summary>
-public static class InvoiceBatch
+public sealed class InvoiceBatchProcessor
 {
-    public static ConsumptionTax.InvoiceResult Run(
+    private readonly ColumnMap _columns;
+    private readonly ConsumptionTaxCalculator _tax;
+
+    public InvoiceBatchProcessor(
+        ColumnMap? columns = null, ConsumptionTaxCalculator? tax = null)
+    {
+        _columns = columns ?? ColumnMap.Invoice;
+        _tax = tax ?? new ConsumptionTaxCalculator();
+    }
+
+    public ConsumptionTaxCalculator.InvoiceResult Run(
         string inputPath, string? sheet, int? headerRow, string? outputPath,
         RoundMode round = RoundMode.Floor)
     {
@@ -20,8 +30,7 @@ public static class InvoiceBatch
                 SheetReader.SheetRows rows;
                 try
                 {
-                    rows = SheetReader.Read(ws, headerRow,
-                        HeaderMap.InvoiceColumns.Values.SelectMany(a => a));
+                    rows = SheetReader.Read(ws, headerRow, _columns.AllHeaders);
                 }
                 catch (ArgumentException)
                 {
@@ -30,8 +39,8 @@ public static class InvoiceBatch
 
                 foreach (var row in rows.Rows)
                 {
-                    var net = HeaderMap.ParseMoney(HeaderMap.Req(row, HeaderMap.InvoiceColumns, "net"));
-                    var rateRaw = decimal.Parse(HeaderMap.Req(row, HeaderMap.InvoiceColumns, "rate"));
+                    var net = HeaderMap.ParseMoney(_columns.Req(row, "net"));
+                    var rateRaw = decimal.Parse(_columns.Req(row, "rate"));
                     var rate = rateRaw > 1m ? rateRaw / 100m : rateRaw;
                     lines.Add((net, rate));
                 }
@@ -41,7 +50,7 @@ public static class InvoiceBatch
         if (lines.Count == 0)
             throw new ArgumentException("明細行が0件です。net/金額, rate/税率 の列を持つシートを確認してください");
 
-        var result = ConsumptionTax.Invoice(lines, round);
+        var result = _tax.Invoice(lines, round);
 
         using (var wb = new XLWorkbook())
         {
@@ -65,4 +74,13 @@ public static class InvoiceBatch
 
         return result;
     }
+}
+
+/// <summary>既定構成での一括実行ショートカット（後方互換ファサード）。</summary>
+public static class InvoiceBatch
+{
+    public static ConsumptionTaxCalculator.InvoiceResult Run(
+        string inputPath, string? sheet, int? headerRow, string? outputPath,
+        RoundMode round = RoundMode.Floor, ColumnMap? columns = null) =>
+        new InvoiceBatchProcessor(columns).Run(inputPath, sheet, headerRow, outputPath, round);
 }

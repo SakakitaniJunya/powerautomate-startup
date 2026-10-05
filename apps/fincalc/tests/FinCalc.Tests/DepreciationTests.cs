@@ -10,7 +10,7 @@ public class DepreciationTests
     [Fact]
     public void StraightLine_NtaExample_10years()
     {
-        var rows = DepreciationCalculator.Schedule(1_000_000, 10, DepreciationMethod.StraightLine);
+        var rows = DepreciationCalculator.Default.Schedule(1_000_000, 10, DepreciationMethod.StraightLine);
 
         Assert.Equal(10, rows.Count);
         Assert.All(rows.Take(9), r => Assert.Equal(100_000, r.Expense));
@@ -23,7 +23,7 @@ public class DepreciationTests
     [Fact]
     public void DecliningBalance_NtaExample_10years()
     {
-        var rows = DepreciationCalculator.Schedule(1_000_000, 10, DepreciationMethod.DecliningBalance200);
+        var rows = DepreciationCalculator.Default.Schedule(1_000_000, 10, DepreciationMethod.DecliningBalance200);
 
         Assert.Equal(200_000, rows[0].Expense);
         Assert.Equal(160_000, rows[1].Expense);
@@ -47,7 +47,7 @@ public class DepreciationTests
     [Fact]
     public void DecliningBalance_NtaExample_8years()
     {
-        var rows = DepreciationCalculator.Schedule(1_000_000, 8, DepreciationMethod.DecliningBalance200);
+        var rows = DepreciationCalculator.Default.Schedule(1_000_000, 8, DepreciationMethod.DecliningBalance200);
 
         Assert.Equal(250_000, rows[0].Expense);
         Assert.Equal(187_500, rows[1].Expense);
@@ -67,7 +67,7 @@ public class DepreciationTests
     [Fact]
     public void StraightLine_FirstYearProration()
     {
-        var rows = DepreciationCalculator.Schedule(
+        var rows = DepreciationCalculator.Default.Schedule(
             1_200_000, 10, DepreciationMethod.StraightLine, firstYearMonths: 6);
 
         Assert.Equal(60_000, rows[0].Expense); // 120,000 × 6/12
@@ -81,7 +81,7 @@ public class DepreciationTests
     [Fact]
     public void DecliningBalance_TwoYears_FullRate()
     {
-        var rows = DepreciationCalculator.Schedule(300_000, 2, DepreciationMethod.DecliningBalance200);
+        var rows = DepreciationCalculator.Default.Schedule(300_000, 2, DepreciationMethod.DecliningBalance200);
         // 率1.000で1年目にほぼ全額償却（備忘価額1円のみ残す）。簿価1円到達で打ち切り
         Assert.Single(rows);
         Assert.Equal(299_999, rows[0].Expense);
@@ -92,6 +92,6 @@ public class DepreciationTests
     public void DecliningBalance_UnsupportedLife_Throws()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            DepreciationCalculator.Schedule(1_000_000, 99, DepreciationMethod.DecliningBalance200));
+            DepreciationCalculator.Default.Schedule(1_000_000, 99, DepreciationMethod.DecliningBalance200));
     }
 }

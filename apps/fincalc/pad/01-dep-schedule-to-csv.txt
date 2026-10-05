@@ -22,7 +22,7 @@ SET FirstYearMonths TO 12
 Scripting.RunDOSCommand.RunDOSCommand DOSCommandOrApplication: $'''%ExePath% dep schedule --method %Method% --cost %Cost% --life %Life% --months %FirstYearMonths%''' WorkingDirectory: WorkDir StandardOutput=> CliOut StandardError=> CliErr ExitCode=> CliExit
 IF CliExit <> 0 THEN
     # エラーダイアログを出してフロー終了 (IF CliExit <> 0 の中で使う)
-    Display.ShowMessageDialog.ShowMessageWithTimeout Title: $'''fincalc エラー''' Message: CliErr Icon: Display.Icon.Warning Buttons: Display.Buttons.OK DefaultButton: Display.DefaultButton.Button1 IsTopMost: False Timeout: 30
+    Display.ShowMessageDialog.ShowMessageWithTimeout Title: $'''エラー''' Message: CliErr Icon: Display.Icon.Warning Buttons: Display.Buttons.OK DefaultButton: Display.DefaultButton.Button1 IsTopMost: False Timeout: 30
     EXIT
 END
 # stdout の JSON をカスタムオブジェクトへ変換

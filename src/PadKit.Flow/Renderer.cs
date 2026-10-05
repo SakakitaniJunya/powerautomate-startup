@@ -18,6 +18,14 @@ public static class Renderer
     private static readonly Regex RequiresDirective =
         new(@"^#!\s*requires:\s*(?<keys>.*)$", RegexOptions.Compiled);
 
+    /// <summary>`#! subflow &lt;Name&gt;` — ここから次の subflow 宣言か EOF までが
+    /// そのサブフローの本文になる。最初の宣言より前がメインフロー。</summary>
+    private static readonly Regex SubflowDirective =
+        new(@"^#!\s*subflow\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*$", RegexOptions.Compiled);
+
+    private static readonly Regex CallLine =
+        new(@"^\s*CALL\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*$", RegexOptions.Compiled);
+
     private static readonly Regex IncludeLine =
         new(@"^(?<indent>\s*)\{\{>\s*(?<name>[A-Za-z0-9_-]+)(?<args>(?:\s+[A-Za-z_][A-Za-z0-9_]*=""(?:[^""\\]|\\.)*"")*)\s*\}\}\s*$",
             RegexOptions.Compiled);
@@ -32,14 +40,15 @@ public static class Renderer
         RenderOptions? options = null)
     {
         var diagnostics = new List<Diagnostic>();
-        var output = RenderCore(recipeText, profile, blocks, diagnostics, options);
+        var (main, subflows) = RenderCore(recipeText, profile, blocks, diagnostics, options);
         var errors = diagnostics.Where(d => d.Severity == Severity.Error).ToList();
         if (errors.Count > 0)
             throw new RenderException(diagnostics);
-        return new RenderResult(output, diagnostics);
+        return new RenderResult(main, subflows, diagnostics);
     }
 
-    private static string RenderCore(string recipeText, Profile profile, BlockResolver blocks,
+    private static (string Main, List<SubflowOutput> Subflows) RenderCore(
+        string recipeText, Profile profile, BlockResolver blocks,
         List<Diagnostic> diagnostics, RenderOptions? options)
     {
         var lines = SplitLines(recipeText);
@@ -54,7 +63,7 @@ public static class Renderer
         for (; i < lines.Count; i++)
         {
             var line = lines[i];
-            if (!line.StartsWith('#')) break;
+            if (!line.StartsWith('#') || SubflowDirective.IsMatch(line)) break;
             var req = RequiresDirective.Match(line);
             if (req.Success)
             {
@@ -65,8 +74,24 @@ public static class Renderer
             result.Add(line);
         }
 
-        // `#!` で始まる行は以降もディレクティブとして落とす
-        var bodyLines = lines.Skip(i).Where(l => !l.StartsWith("#!")).ToList();
+        // `#!` で始まる行はディレクティブ。subflow 宣言だけはセクション境界として残す
+        var bodyLines = lines.Skip(i)
+            .Where(l => !l.StartsWith("#!") || SubflowDirective.IsMatch(l)).ToList();
+
+        // 本文を `#! subflow` 宣言で分割 (先頭がメイン、以降は各サブフロー)
+        var sections = new List<(string? Name, List<string> Lines)> { (null, new List<string>()) };
+        foreach (var l in bodyLines)
+        {
+            var sm = SubflowDirective.Match(l);
+            if (sm.Success)
+                sections.Add((sm.Groups["name"].Value, new List<string>()));
+            else
+                sections[^1].Lines.Add(l);
+        }
+        var declared = sections.Skip(1).Select(s => s.Name!).ToList();
+        foreach (var dup in declared.GroupBy(n => n).Where(g => g.Count() > 1))
+            diagnostics.Add(new Diagnostic("E_SUBFLOW", 0, Severity.Error,
+                $"サブフロー '{dup.Key}' が重複定義されています"));
 
         // requires の SET 行をヘッダ直後へ差し込む
         if (requiredKeys.Count > 0)
@@ -88,19 +113,51 @@ public static class Renderer
             }
         }
 
-        // include 展開 (深さ 0 から)
-        ExpandLines(bodyLines, blocks, indent: "", depth: 0,
+        // include 展開 (深さ 0 から)。メインと各サブフローを別々に展開する
+        ExpandLines(sections[0].Lines, blocks, indent: "", depth: 0,
             values: new Dictionary<string, string>(), result, diagnostics);
 
-        // 残った {{...}} は未解決パラメータ
-        for (var n = 0; n < result.Count; n++)
+        var subOutputs = new List<(string Name, List<string> Lines)>();
+        foreach (var (name, secLines) in sections.Skip(1))
         {
-            if (ParamRef.IsMatch(result[n]) || result[n].Contains("{{"))
-                diagnostics.Add(new Diagnostic("E_UNRESOLVED", n + 1, Severity.Error,
-                    $"未解決の '{{{{...}}}}' があります: {result[n].Trim()}"));
+            var sub = new List<string>();
+            if (options?.GeneratedHeader is { } h)
+                sub.Add(h.StartsWith('#') ? h : "# " + h);
+            sub.Add($"# subflow: {name} — PAD の同名サブフロータブに貼り付けること");
+            ExpandLines(secLines, blocks, indent: "", depth: 0,
+                values: new Dictionary<string, string>(), sub, diagnostics);
+            subOutputs.Add((name!, sub));
         }
 
-        return string.Join(Environment.NewLine, result);
+        // 残った {{...}} は未解決パラメータ
+        var allOutputs = new List<List<string>> { result };
+        allOutputs.AddRange(subOutputs.Select(s => s.Lines));
+        foreach (var lines2 in allOutputs)
+            for (var n = 0; n < lines2.Count; n++)
+            {
+                if (ParamRef.IsMatch(lines2[n]) || lines2[n].Contains("{{"))
+                    diagnostics.Add(new Diagnostic("E_UNRESOLVED", n + 1, Severity.Error,
+                        $"未解決の '{{{{...}}}}' があります: {lines2[n].Trim()}"));
+            }
+
+        // CALL 検証: 未定義の呼び先は error、呼ばれないサブフローは warning
+        var called = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var lines2 in allOutputs)
+            foreach (var l in lines2)
+            {
+                var cm = CallLine.Match(l);
+                if (cm.Success) called.Add(cm.Groups["name"].Value);
+            }
+        foreach (var c in called.Where(c => !declared.Contains(c)))
+            diagnostics.Add(new Diagnostic("E_SUBFLOW", 0, Severity.Error,
+                $"CALL '{c}' に対応する '#! subflow {c}' がありません"));
+        foreach (var d in declared.Where(d => !called.Contains(d)))
+            diagnostics.Add(new Diagnostic("W_SUBFLOW", 0, Severity.Warning,
+                $"サブフロー '{d}' はどこからも CALL されていません"));
+
+        return (string.Join(Environment.NewLine, result),
+            subOutputs.Select(s => new SubflowOutput(s.Name,
+                string.Join(Environment.NewLine, s.Lines))).ToList());
     }
 
     private static void ExpandLines(IReadOnlyList<string> lines, BlockResolver blocks,

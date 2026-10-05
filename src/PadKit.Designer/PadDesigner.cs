@@ -31,6 +31,10 @@ public sealed class PadDesigner : IDisposable
     private const string SaveButtonId = "SaveDraftFlowButton";
     private const string RunButtonId = "StartFlowButton";
     private const string SummaryTextId = "ProgramItemTemplateSummaryTextBlock";
+    private const string SubflowTabId = "SubflowTabControl";
+    private const string NewSubflowButtonId = "FunctionsAreaViewNewSubFlowButton";
+    private const string SubflowNameBoxId = "SubFlowNameTextBox";
+    private const string SubflowOkButtonId = "SubFlowEditDataTemplateOKButton";
 
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
     private static readonly Regex ErrorTextPattern =
@@ -209,6 +213,84 @@ public sealed class PadDesigner : IDisposable
         var texts = errors > 0 ? CollectErrorTexts().Take(12).ToList()
             : (IReadOnlyList<string>)Array.Empty<string>();
         return new CheckResult(ActionCount(), errors, texts);
+    }
+
+    /// <summary>開いているサブフロータブ名の一覧 (Main を含む)。</summary>
+    public IReadOnlyList<string> SubflowNames()
+    {
+        var tab = FindById(SubflowTabId);
+        if (tab is null) return Array.Empty<string>();
+        var names = new List<string>();
+        foreach (var item in tab.FindAllDescendants(cf => cf.ByControlType(ControlType.TabItem)))
+        {
+            // TabItem の Name は "Main, エラーあり," のように装飾されるため
+            // 内側の Text 要素 (サブフロー名だけを持つ) を読む
+            var t = item.FindFirstDescendant(cf => cf.ByControlType(ControlType.Text));
+            var n = t is null ? "" : SafeStr(() => t.Name);
+            if (n.Length > 0) names.Add(n);
+        }
+        return names;
+    }
+
+    /// <summary>名前でサブフロータブを選択する (Main も選べる)。</summary>
+    public void SelectSubflow(string name)
+    {
+        var tab = FindById(SubflowTabId)
+            ?? throw new PadDesignerException($"サブフロータブ '{SubflowTabId}' が見つかりません");
+        foreach (var item in tab.FindAllDescendants(cf => cf.ByControlType(ControlType.TabItem)))
+        {
+            var t = item.FindFirstDescendant(cf => cf.ByControlType(ControlType.Text));
+            if ((t is null ? "" : SafeStr(() => t.Name)) != name) continue;
+            _window.SetForeground();
+            Thread.Sleep(300);
+            if (item.Patterns.SelectionItem.IsSupported)
+                item.Patterns.SelectionItem.Pattern.Select();
+            else
+                item.Click();
+            Thread.Sleep(600);
+            return;
+        }
+        throw new PadDesignerException(
+            $"サブフロータブ '{name}' が見つかりません (存在: {string.Join(", ", SubflowNames())})");
+    }
+
+    /// <summary>「新規」→ 名前入力 → 保存でサブフローを作り、そのタブを選択する。</summary>
+    public void CreateSubflow(string name)
+    {
+        var btn = FindById(NewSubflowButtonId)
+            ?? throw new PadDesignerException($"新規サブフローボタン '{NewSubflowButtonId}' が見つかりません");
+        _window.SetForeground();
+        Thread.Sleep(300);
+        btn.Click();
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        AutomationElement? box = null;
+        while (DateTime.UtcNow < deadline && box is null)
+        {
+            box = FindById(SubflowNameBoxId);
+            Thread.Sleep(300);
+        }
+        if (box is null)
+            throw new PadDesignerException("サブフロー追加ダイアログが開きませんでした");
+
+        if (box.Patterns.Value.IsSupported)
+            box.Patterns.Value.Pattern.SetValue(name);
+        else
+        {
+            box.Click();
+            Keyboard.Type(name);
+        }
+        Thread.Sleep(200);
+        (FindById(SubflowOkButtonId)
+            ?? throw new PadDesignerException("サブフロー追加ダイアログの保存ボタンが見つかりません")).Click();
+
+        deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (SubflowNames().Contains(name)) break;
+            Thread.Sleep(400);
+        }
+        SelectSubflow(name);
     }
 
     /// <summary>ドラフトを保存し、ステータスが ready に戻るまで待つ (30 秒)。</summary>
