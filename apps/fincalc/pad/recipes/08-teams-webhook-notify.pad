@@ -1,0 +1,32 @@
+# ============================================================
+# 08 - 計算結果を Teams チャネルに Webhook 通知
+# ------------------------------------------------------------
+# fincalc.exe の結果を Teams チャネルに POST する。
+# 事前準備: チャネルの「…」→「ワークフロー」→「Webhook アラートを
+#   チャネルに送信する」テンプレートを保存し、Webhook リンクをコピー
+#   → プロファイルの WebhookUrl に入れる（API キー不要）。
+#   ※ URL 中の % は %% にエスケープする（プロファイル値も同様）。
+#   ※ 旧「Incoming Webhook」コネクタは新 Teams では使えない。
+# 本文は Adaptive Card 形式が必須（{"text":"..."} は 202 を返すが
+#   サイレントに捨てられる）。応答は HTTP 202 なので 2xx を成功扱い。
+# ============================================================
+#! requires: ExePath WorkDir WebhookUrl
+
+# --- 計算実行（ここでは例として定率法スケジュール） ---
+{{> run-cli-or-exit Args="dep schedule --method declining --cost 1000000 --life 10 --months 12" Into="Result"}}
+
+# --- Teams に送る JSON 本文を組み立て（FactSet リッチカード） ---
+# 償却完了までの年数 = schedule.Count、初年度費 = schedule[0].expense
+SET LastIndex TO Result.schedule.Count - 1
+SET LastYear TO Result.schedule[LastIndex]
+SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"減価償却 計算完了","weight":"bolder","size":"medium","color":"accent"},{"type":"FactSet","facts":[{"title":"資産","value":"リースサーバー（サンプル）"},{"title":"取得価額","value":"%Result.cost% 円"},{"title":"耐用年数","value":"%Result.usefulLifeYears% 年"},{"title":"償却方法","value":"%Result.method%"},{"title":"初年度償却費","value":"%Result.schedule[0].expense% 円"},{"title":"最終年償却費","value":"%LastYear.expense% 円"}]},{"type":"Container","style":"emphasis","items":[{"type":"TextBlock","text":"fincalc.exe + PAD 自動計算フロー","isSubtle":true,"wrap":true,"size":"small"}]}]}}]}'''
+
+# --- Webhook POST ---
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+
+IF (WebStatus < 200) OR (WebStatus > 299) THEN
+    {{> warn-dialog Title="Teams 通知失敗" Message="$'''HTTP %WebStatus% : %WebResponse%'''" Timeout="30"}}
+    EXIT
+END
+
+{{> info-dialog Title="完了" Message="$'''Teams に通知しました (HTTP %WebStatus%)'''"}}

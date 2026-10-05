@@ -1,0 +1,33 @@
+# ============================================================
+# 03 - 請求明細 CSV を税率別に集計して消費税を計算（インボイス方式）
+# ------------------------------------------------------------
+# 想定する CSV (先頭行ヘッダ): net,rate   例: 333,10 / 111,8
+# PAD 側で lines JSON を組み立てて fincalc tax invoice をキック。
+# 税率ごとに合計してから端数処理するのがインボイスのルール。
+# ============================================================
+#! requires: ExePath WorkDir CsvPath
+
+{{> read-csv Path="CsvPath" Into="Lines"}}
+
+# [{"net":333,"rate":10}, ...] 形式の JSON を組み立てる
+SET LinesJson TO $'''['''
+LOOP FOREACH Row IN Lines
+    SET LinesJson TO $'''%LinesJson%{"net":%Row[0]%,"rate":%Row[1]%},'''
+END
+# 閉じる（fincalc 側で末尾カンマを許容するので Crop 不要）
+SET LinesJson TO $'''%LinesJson%]'''
+
+{{> run-cli-or-exit Args="tax invoice --lines \"%LinesJson%\" --round floor" Into="Invoice"}}
+
+# 税率別内訳を表示（10% / 8% の課税標準・税額）
+SET Summary TO $'''税率別内訳:
+'''
+LOOP FOREACH G IN Invoice.groups
+    SET RatePct TO G.rate * 100
+    SET Summary TO $'''%Summary%税率 %RatePct%％ : 対象額 %G.netTotal% 円 / 税額 %G.taxTotal% 円
+'''
+END
+SET Summary TO $'''%Summary%---
+合計: 税抜 %Invoice.netTotal% 円 / 消費税 %Invoice.taxTotal% 円 / 税込 %Invoice.grossTotal% 円'''
+
+{{> info-dialog Title="消費税計算結果" Message="Summary" Timeout="60"}}

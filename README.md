@@ -125,6 +125,9 @@ scope: `code` = `$'''...'''` の外側、`string` = 内側、`line` = 行全体�
 | PAD011 | error | code | `RunApplication ... Timeout:` | 引数削除 |
 | PAD012 | warning | code | `InvokeWebService EncodeRequestBody: True` | `False` に |
 | PAD013 | warning | code | `Excel.CloseExcel.Close` (未検証) | `CloseAndSave` に |
+| PAD014 | warning | string | JSON 内の `%Path系変数%` (`\\` が不正エスケープ→投稿が黙って捨てられる) | `/` 区切りリテラルか `file:///` URI |
+| PAD015 | error | code | `Display.DialogResult.X` を IF 条件で参照 (貼り付け拒否) | `ButtonPressed = 'Yes'` の文字列比較 |
+| PAD016 | warning | code | `DateTime.DateTimeFormat.DateTime` / `.Date` 単体 | `Date`/`DateOnly`/`DateAndTime` を使う |
 | PAD100 | error | — | IF/LOOP と END の不対応、IF 外の ELSE、迷子 END (C# 実装) | 構造修正 |
 | PAD101 | error | — | 未解決の `{{` 残留 (C# 実装) | 引数を直す |
 
