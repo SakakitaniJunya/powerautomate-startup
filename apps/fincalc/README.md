@@ -56,10 +56,13 @@ dotnet run --project src/FinCalc.Cli -c Release -- dep schedule --method declini
 | 請求書の税率別税額 | `fincalc tax invoice --lines '[{"net":333,"rate":10},{"net":111,"rate":8}]'` |
 | 源泉所得税（報酬） | `fincalc tax withholding --amount 1500000` |
 | 法人税概算（中小法人） | `fincalc tax corporate --income 10000000` |
-| Excel 資産台帳一括 | `fincalc excel dep-batch --input assets.xlsx [--sheet 名\|番号\|*] [--header-row N] [--output out.xlsx]` |
-| Excel 請求明細の税率別集計 | `fincalc excel invoice --input lines.xlsx [--sheet ...]` |
+| Excel 資産台帳一括 | `fincalc excel dep-batch --input assets.xlsx [--sheet 名\|番号\|*] [--header-row N] [--output out.xlsx] [--dept profile.json]` |
+| Excel 請求明細の税率別集計 | `fincalc excel invoice --input lines.xlsx [--sheet ...] [--dept profile.json]` |
 | Excel → JSON 化（PAD 用） | `fincalc excel read --input x.xlsx [--sheet 名\|番号]` |
-| サンプル帳票生成 | `fincalc excel init-sample [--output assets.xlsx]` |
+| 遅延台帳の未提出一覧 | `fincalc excel delay-list --input delay.xlsx` |
+| 遅延理由の書き戻し | `fincalc excel delay-submit --input delay.xlsx --row N --reason テキスト [--draft]` |
+| 提出状況の日次集計 | `fincalc excel delay-status --input delay.xlsx` |
+| サンプル帳票生成 | `fincalc excel init-sample [--output assets.xlsx]` / `fincalc excel init-delay [--output delay.xlsx]` |
 
 ## Excel 一括処理（複雑な帳票向け）
 
@@ -73,6 +76,43 @@ dotnet run --project src/FinCalc.Cli -c Release -- dep schedule --method declini
 - **シート指定**: `--sheet` に名前 or 1始まりの番号。`*` で全シート横断
   （既知ヘッダを持たないシートは自動で読み飛ばす）。
 - **1行の失敗で止まらない**: エラーは summary の error 列に記録され、他の行は処理される。
+
+## 部署プロファイル + 異常時の部長メール（pad/17）
+
+部署ごとに列対応・異常ルール・部長のメールアドレスを1 JSON に束ねる:
+
+```json
+{
+  "code": "dept-a", "name": "営業部",
+  "managerEmail": "dept-a-manager@example.com",
+  "columns": { "asset": { "cost": ["仕入価額"] } },
+  "anomaly": { "maxCost": 5000000, "minLife": 2, "maxLife": 50 }
+}
+```
+
+`excel dep-batch --dept profile.json` はこの列対応で読み、パースエラー行と
+閾値違反行を `anomalies[]`（sheet/row/field/value/reason）として返す。
+`managerEmail` も JSON に載るので、PAD 側は `Batch.anomalyCount > 0` なら
+Outlook で部長へ送信するだけでよい（17 番テンプレート）。
+部署ごとの列名の揺れも `--columns map.json` で個別に上書きできる
+（雛形: `columns/asset-columns.example.json`）。新しい部署を足すときは
+プロファイル JSON を増やすだけ。
+
+## 遅延理由の回収（pad/18 + 19）
+
+遅延台帳 xlsx（列: 担当者/メール/案件/期限/遅延理由/状態）を hub にした
+回収ワークフロー:
+
+1. **18 番** — `excel delay-list` で未提出案件を担当者ごとに集約し、
+   1人1枚の Adaptive Card（案件ごとの Input.Text + 「提出」「一時保存」ボタン）
+   を Teams に投稿。
+2. **回答の書き戻し** — 提出=`excel delay-submit --row N --reason ...`、
+   一時保存=同コマンドに `--draft`（状態が「一時保存」になり未提出扱いのまま）。
+   ※ 一方向 webhook ではカードの Submit 応答を直接受け取れないため、本番では
+   Teams 側フロー「アダプティブ カードを投稿して応答を待つ」に差し替える。
+3. **19 番（日次）** — `excel delay-status` が全員提出済みか判定。
+   未提出者がいれば1人ごとにリマインドカード + チャネルに集約カード。
+   日次実行は Windows タスクスケジューラ等からフローを起動して運用する。
 
 ## 実行環境への持ち込み手順
 

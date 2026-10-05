@@ -22,8 +22,17 @@ public sealed class ColumnMap
     public static ColumnMap Invoice { get; } = new(HeaderMap.InvoiceColumns.ToDictionary(
         kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value));
 
+    /// <summary>遅延理由台帳（delay-* バッチ）の既定列対応。</summary>
+    public static ColumnMap Delay { get; } = new(HeaderMap.DelayColumns.ToDictionary(
+        kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value));
+
     /// <summary>ヘッダ行検出用に、全別名を列挙する。</summary>
     public IEnumerable<string> AllHeaders => _aliases.Values.SelectMany(a => a);
+
+    /// <summary>論理名に対応する別名一覧（書き戻し時の列特定用）。</summary>
+    public IReadOnlyList<string> AliasesFor(string logical) =>
+        _aliases.TryGetValue(logical, out var names) ? names
+            : throw new ArgumentException($"論理列 '{logical}' はこの ColumnMap に未定義です");
 
     /// <summary>対応表を別セットで上書きした新しい ColumnMap を返す（元は変更しない）。</summary>
     public ColumnMap WithOverrides(IReadOnlyDictionary<string, IReadOnlyList<string>> overrides)
@@ -56,14 +65,15 @@ public sealed class ColumnMap
             $"行{row.RowNumber}: 列 '{logical}'（{string.Join("/", _aliases[logical])}）が見つかりません");
 }
 
-/// <summary>資産台帳用と請求明細用の ColumnMap の組。部署別 JSON から読み込む。</summary>
-public sealed record ColumnMapSet(ColumnMap Asset, ColumnMap Invoice)
+/// <summary>資産台帳・請求明細・遅延台帳用の ColumnMap の組。部署別 JSON から読み込む。</summary>
+public sealed record ColumnMapSet(ColumnMap Asset, ColumnMap Invoice, ColumnMap Delay)
 {
-    public static ColumnMapSet Default { get; } = new(ColumnMap.Asset, ColumnMap.Invoice);
+    public static ColumnMapSet Default { get; } =
+        new(ColumnMap.Asset, ColumnMap.Invoice, ColumnMap.Delay);
 
     /// <summary>
     /// 部署別の列対応 JSON を読む。形式:
-    /// { "asset": { "cost": ["仕入価額", ...] }, "invoice": { "net": [...] } }
+    /// { "asset": { "cost": ["仕入価額", ...] }, "invoice": { "net": [...] }, "delay": { ... } }
     /// 指定した論理名だけ既定エイリアスを置き換える。未定義の論理名も追加可能。
     /// </summary>
     public static ColumnMapSet Load(string path)
@@ -73,10 +83,18 @@ public sealed record ColumnMapSet(ColumnMap Asset, ColumnMap Invoice)
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true, ReadCommentHandling = JsonCommentHandling.Skip })
             ?? throw new ArgumentException($"列対応 JSON が空です: {path}");
 
-        return new(
-            doc.TryGetValue("asset", out var a) ? ColumnMap.Asset.WithOverrides(ToMap(a)) : ColumnMap.Asset,
-            doc.TryGetValue("invoice", out var i) ? ColumnMap.Invoice.WithOverrides(ToMap(i)) : ColumnMap.Invoice);
+        return FromSections(doc);
     }
+
+    /// <summary>"asset"/"invoice"/"delay" セクション辞書から ColumnMapSet を組み立てる。</summary>
+    public static ColumnMapSet FromSections(
+        IReadOnlyDictionary<string, Dictionary<string, string[]>> sections) => new(
+            sections.TryGetValue("asset", out var a) && a is not null
+                ? ColumnMap.Asset.WithOverrides(ToMap(a)) : ColumnMap.Asset,
+            sections.TryGetValue("invoice", out var i) && i is not null
+                ? ColumnMap.Invoice.WithOverrides(ToMap(i)) : ColumnMap.Invoice,
+            sections.TryGetValue("delay", out var d) && d is not null
+                ? ColumnMap.Delay.WithOverrides(ToMap(d)) : ColumnMap.Delay);
 
     private static Dictionary<string, IReadOnlyList<string>> ToMap(Dictionary<string, string[]> d) =>
         d.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value);

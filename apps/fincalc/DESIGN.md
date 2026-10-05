@@ -76,11 +76,20 @@
   違っても JSON を配るだけでコード変更不要。CLI では `--columns` で指定
 - `HeaderMap` — 既定エイリアス表 + 値パーサ (金額/整数/償却方法/端数処理)
 - `DepreciationBatchProcessor` — `excel dep-batch` の本体。
-  `ColumnMap` と `DepreciationCalculator` をコンストラクタ注入。
-  全シート横断→行ごと償却→summary(結果+error列)と schedule シート出力
+  `ColumnMap` と `DepreciationCalculator`、異常判定ポリシー `AnomalyRules` を
+  コンストラクタ注入。全シート横断→行ごと償却→summary(結果+error列)と
+  schedule シート出力。異常があれば anomalies シートも追加
 - `InvoiceBatchProcessor` — 同型で請求集計 (`ConsumptionTaxCalculator` 注入)
+- `Anomaly` / `AnomalyRules` — 異常1件 (sheet/row/asset/field/value/reason) と
+  部署別閾値ルール (maxCost/minLife/maxLife/maxYear1Expense)。
+  パースエラー行は自動で anomaly 化、値は読めたが部署基準外の行をルールで拾う
+- `DepartmentProfile` — 部署プロファイル (code/name/managerEmail/columns/anomaly)
+  を1 JSON に束ねる。CLI は `--dept` で読み、列対応・異常ルール・通知先
+  (managerEmail) を出力へ載せる → PAD はこれを見て部長へメールを振り分ける
+- `DelayLedger` — 遅延理由回収台帳。ReadItems (読取) / Status (担当者別集計) /
+  Submit (遅延理由+状態の書戻し。draft=一時保存)。状態: 未入力/一時保存/提出済
 - `DepBatch` / `InvoiceBatch` — 既定構成の静的ファサード (後方互換)
-- `SampleWorkbook` — サンプル生成
+- `SampleWorkbook` / `DelayLedger.CreateSample` — サンプル生成
 
 ### 3.3 FinCalc.Cli (fincalc.exe)
 
@@ -108,7 +117,7 @@
   - `client.json` = 配布先用サンプル (`C:\work\fincalc`) /
     `dev.json` = 本機 (gitignore。`dev.json.example` からコピー)
   - `dev.local.json` = 秘密値オーバーレイ (gitignore。`--profile dev --profile dev.local` で後勝ち)
-- 16 テンプレートの用途は `pad/README.md` の一覧表参照
+- 19 テンプレートの用途は `pad/README.md` の一覧表参照
 
 ### 3.5 padkit designer (検証自動化)
 
@@ -125,6 +134,12 @@
 - PAD 側の定型ブロック (`run-cli-or-exit`): exit≠0 ならダイアログ→EXIT
 - JSON は全コマンド snake_case のフラットなオブジェクト
   (`dep schedule` は `schedule[]` に year/method/rate/expense/accumulated/bookValueEnd/isRevised)
+- `excel dep-batch --dept profile.json` は `department` / `managerEmail` /
+  `anomalyCount` / `anomalies[]` を追加で返す。PAD は `Batch.anomalyCount > 0` で
+  分岐し `Batch.managerEmail` 宛に Outlook 送信する (17 番)
+- `excel delay-list` は `persons[].items[]` (pending のみ、row 番号つき)、
+  `delay-submit --row N --reason ... [--draft]` が台帳へ書戻し、
+  `delay-status` が `allSubmitted`/`persons[].pendingItems` を返す (18/19 番)
 
 ### 4.2 PAD テキスト形式 (PAD 11.2609 実機検証済みの制約)
 
@@ -138,6 +153,7 @@
 | FOREACH | `LoopIndex` は生成されない → カウンタ変数 |
 | IF 条件 | enum 参照不可 (`Display.DialogResult.Yes` → `'Yes'` 文字列比較) |
 | サブフロー | `FUNCTION` ブロックは貼付不可 → `#! subflow` で `名.<Sub>.txt` を生成し `designer flow` でタブごと貼付。呼び出しは `CALL <名>` |
+| Outlook 送信 | `Outlook.Launch.Launch Instance=> X` / `Outlook.SendEmailThroughOutlook.SendEmail Instance: X Account: アカウント名 SendTo: [宛先] Subject/Body ...` / `Outlook.Close.Close Instance: X`。`SendTo` は宛先**リスト**型 — `[Batch.managerEmail]` のように `%` 無しのリストリテラルで渡す。`Account` は空不可。`IsDraft: True` で送信せず下書き保存にできる (検証用) |
 
 これらは padkit `rules/pad-11.2609.json` として機械検査可能な形で保持。
 
@@ -159,8 +175,8 @@
 
 | 層 | 手段 |
 |---|---|
-| 計算 | xunit 24 件。国税庁公表の計算例と突合 (償却費・源泉税額等) + 列対応・戦略拡張の回帰 |
-| レシピ → テキスト | padkit lint (rules/pad-11.2609.json) + GoldenTests (15 レシピ全件 0 指摘) |
+| 計算 | xunit 39 件。国税庁公表の計算例と突合 (償却費・源泉税額等) + 列対応・戦略拡張・部署プロファイル・遅延台帳の回帰 |
+| レシピ → テキスト | padkit lint (rules/pad-11.2609.json) + GoldenTests (全レシピ 0 指摘) |
 | PAD 適合 | `padkit designer check` — 実機デザイナーに貼付し actions>0 & errors=0 |
 | 実行 | `padkit designer run` — 保存→実行→`Flow_status_ready` 遷移を監視 |
 | Teams | 実チャネル投稿を UIA で確認 (08-15 全件 投稿済) |

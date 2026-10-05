@@ -63,4 +63,8 @@ public sealed class CommandArgs
     /// <summary>--columns で部署別列対応 JSON を読む。未指定なら既定の対応表。</summary>
     public ColumnMapSet LoadColumns() =>
         _opts.TryGetValue("columns", out var path) ? ColumnMapSet.Load(path) : ColumnMapSet.Default;
+
+    /// <summary>--dept で部署プロファイル（列対応+異常ルール+部長メール）を読む。</summary>
+    public DepartmentProfile? LoadDepartment() =>
+        _opts.TryGetValue("dept", out var path) ? DepartmentProfile.Load(path) : null;
 }

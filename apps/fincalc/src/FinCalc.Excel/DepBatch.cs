@@ -15,16 +15,21 @@ public sealed class DepreciationBatchProcessor
         string Sheet, int Row, string Asset, long Cost, int Life, string Method,
         long? Year1Expense, long? TotalExpense, long? FinalBookValue, string? Error);
 
-    public sealed record Result(IReadOnlyList<SummaryRow> Summary, int OkCount, int ErrorCount, string OutputPath);
+    public sealed record Result(
+        IReadOnlyList<SummaryRow> Summary, int OkCount, int ErrorCount,
+        IReadOnlyList<Anomaly> Anomalies, string OutputPath);
 
     private readonly ColumnMap _columns;
     private readonly DepreciationCalculator _calculator;
+    private readonly AnomalyRules _rules;
 
     public DepreciationBatchProcessor(
-        ColumnMap? columns = null, DepreciationCalculator? calculator = null)
+        ColumnMap? columns = null, DepreciationCalculator? calculator = null,
+        AnomalyRules? anomalyRules = null)
     {
         _columns = columns ?? ColumnMap.Asset;
         _calculator = calculator ?? DepreciationCalculator.Default;
+        _rules = anomalyRules ?? AnomalyRules.None;
     }
 
     public Result Run(string inputPath, string? sheet, int? headerRow, string? outputPath)
@@ -32,6 +37,7 @@ public sealed class DepreciationBatchProcessor
         outputPath ??= Path.ChangeExtension(inputPath, ".result.xlsx");
 
         var summary = new List<SummaryRow>();
+        var anomalies = new List<Anomaly>();
         var schedules = new List<(string Asset, DepreciationEntry E)>();
 
         using (var wb = new XLWorkbook(inputPath))
@@ -66,23 +72,33 @@ public sealed class DepreciationBatchProcessor
                         summary.Add(new(rows.SheetName, row.RowNumber, name, cost, life,
                             method.ToString(), sched[0].Expense, sched.Sum(e => e.Expense),
                             sched[^1].BookValueEnd, null));
+
+                        // 値は読めたが部署ルール上は異常、という行を拾う
+                        foreach (var (field, value, reason) in
+                                 _rules.Check(cost, life, sched[0].Expense))
+                            anomalies.Add(new(rows.SheetName, row.RowNumber, name,
+                                field, value, reason));
                     }
                     catch (Exception ex)
                     {
                         summary.Add(new(rows.SheetName, row.RowNumber, name, 0, 0, "",
                             null, null, null, ex.Message));
+                        anomalies.Add(new(rows.SheetName, row.RowNumber, name,
+                            "row", null, ex.Message));
                     }
                 }
             }
         }
 
-        WriteResult(outputPath, summary, schedules);
+        WriteResult(outputPath, summary, schedules, anomalies);
 
-        return new(summary, summary.Count(s => s.Error is null), summary.Count(s => s.Error is not null), outputPath);
+        return new(summary, summary.Count(s => s.Error is null),
+            summary.Count(s => s.Error is not null), anomalies, outputPath);
     }
 
     private static void WriteResult(
-        string outputPath, List<SummaryRow> summary, List<(string Asset, DepreciationEntry E)> schedules)
+        string outputPath, List<SummaryRow> summary,
+        List<(string Asset, DepreciationEntry E)> schedules, List<Anomaly> anomalies)
     {
         using var wb = new XLWorkbook();
 
@@ -123,6 +139,25 @@ public sealed class DepreciationBatchProcessor
             r++;
         }
         wsSch.Columns().AdjustToContents();
+
+        // 異常があるときだけ anomalies シートを出す（部長レビュー用）
+        if (anomalies.Count > 0)
+        {
+            var wsAn = wb.AddWorksheet("anomalies");
+            wsAn.Cell(1, 1).InsertData(new[] { "sheet", "row", "asset", "field", "value", "reason" });
+            r = 2;
+            foreach (var a in anomalies)
+            {
+                wsAn.Cell(r, 1).Value = a.Sheet;
+                wsAn.Cell(r, 2).Value = a.Row;
+                wsAn.Cell(r, 3).Value = a.Asset;
+                wsAn.Cell(r, 4).Value = a.Field;
+                if (a.Value is { } v) wsAn.Cell(r, 5).Value = v;
+                wsAn.Cell(r, 6).Value = a.Reason;
+                r++;
+            }
+            wsAn.Columns().AdjustToContents();
+        }
 
         wb.SaveAs(outputPath);
     }

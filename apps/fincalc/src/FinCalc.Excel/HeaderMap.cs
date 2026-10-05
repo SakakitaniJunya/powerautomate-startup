@@ -20,6 +20,17 @@ public static class HeaderMap
         ["rate"] = ["rate", "税率", "消費税率"],
     };
 
+    // 遅延理由回収台帳（delay-* コマンド用）
+    public static readonly Dictionary<string, string[]> DelayColumns = new()
+    {
+        ["person"] = ["担当者", "担当", "person", "owner"],
+        ["email"] = ["メール", "メールアドレス", "email", "mail"],
+        ["item"] = ["案件", "案件名", "item", "案件id", "id"],
+        ["due"] = ["期限", "期日", "due", "duedate", "納期"],
+        ["reason"] = ["遅延理由", "理由", "reason"],
+        ["status"] = ["状態", "status", "進捗"],
+    };
+
     public static string? Get(SheetReader.RowData row, Dictionary<string, string[]> map, string logical)
     {
         var aliases = map[logical].Select(SheetReader.Normalize).ToHashSet();

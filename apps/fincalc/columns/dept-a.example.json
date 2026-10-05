@@ -1,0 +1,21 @@
+{
+  "code": "dept-a",
+  "name": "営業部",
+  "managerEmail": "dept-a-manager@example.com",
+  "columns": {
+    "asset": {
+      "name": ["管理番号", "資産コード", "資産名"],
+      "cost": ["仕入価額", "購入金額", "取得価額"],
+      "life": ["償却年数", "法定耐用年数", "耐用年数"],
+      "method": ["償却方法"],
+      "months": ["供用開始月数", "供用月数"],
+      "round": ["丸め方法", "端数処理"]
+    }
+  },
+  "anomaly": {
+    "maxCost": 5000000,
+    "minLife": 2,
+    "maxLife": 50,
+    "maxYear1Expense": 3000000
+  }
+}

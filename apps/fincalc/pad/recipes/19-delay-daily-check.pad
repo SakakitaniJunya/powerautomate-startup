@@ -1,0 +1,63 @@
+# ============================================================
+# 19 - 日次チェック: 遅延理由が全員提出済みか確認→未提出者へリマインド
+# ------------------------------------------------------------
+# 遅延台帳を delay-status で集計し、
+#   全員提出済み        → [OK] カードをチャネルに投稿
+#   未提出者がいる      → その人ごとに未提出案件一覧のリマインドカード
+# を投稿する。日次実行は Windows タスクスケジューラ等から
+# このフローを起動して運用する。
+#
+#   Main          = 司令塔
+#   CheckStatus   = delay-status 実行 → Status (persons/pendingItems)
+#   SendReminders = 未提出者へリマインドカード + 監査ログ
+#   PostAllDone   = 全員完了の確認カード + ログ
+#   LogCliError   = exe 失敗をログ + 警告
+# ============================================================
+#! requires: ExePath WorkDir DelayXlsx WebhookUrl LogPath
+
+SET JobName TO $'''遅延理由 日次チェック'''
+
+CALL CheckStatus
+IF CliExit = 0 THEN
+    IF Status.allSubmitted = True THEN
+        CALL PostAllDone
+    ELSE
+        CALL SendReminders
+    END
+ELSE
+    CALL LogCliError
+END
+
+#! subflow CheckStatus
+{{> run-cli Args="excel delay-status --input \"%DelayXlsx%\""}}
+IF CliExit = 0 THEN
+    {{> json-parse Into="Status"}}
+END
+
+#! subflow SendReminders
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+LOOP FOREACH P IN Status.persons
+    IF P.pending > 0 THEN
+        # 未提出案件の箇条書きを組み立て (JSON 内の \n は改行として描画される)
+        SET ListText TO $''''''
+        LOOP FOREACH Pi IN P.pendingItems
+            SET ListText TO $'''%ListText%・%Pi.item%（期限 %Pi.due%）\n'''
+        END
+        SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[リマインド] %P.person% さん: 遅延理由が未提出です","weight":"bolder","size":"medium","color":"warning"},{"type":"TextBlock","text":"%ListText%","wrap":true},{"type":"Container","style":"warning","items":[{"type":"TextBlock","text":"%P.pending% 件が未提出（うち一時保存 %P.draft% 件）。本日中に入力をお願いします。","wrap":true}]}]}}]}'''
+        {{> teams-notify Url="WebhookUrl" Body="Body"}}
+        {{> append-log Path="LogPath" Text="%Now% [REMIND] %P.person% 未提出 %P.pending% 件を通知"}}
+    END
+END
+SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[日次チェック] 遅延理由 未提出者あり","weight":"bolder","size":"medium","color":"warning"},{"type":"FactSet","facts":[{"title":"未提出者","value":"%Status.pendingPersons% 人"},{"title":"未提出案件","value":"%Status.pendingItems% 件"},{"title":"時刻","value":"%Now%"}]},{"type":"Container","style":"warning","items":[{"type":"TextBlock","text":"未提出者へリマインドカードを送信しました","wrap":true}]}]}}]}'''
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+
+#! subflow PostAllDone
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[OK] 遅延理由 全員提出済み","weight":"bolder","size":"medium"},{"type":"FactSet","facts":[{"title":"時刻","value":"%Now%"}]},{"type":"Container","style":"good","items":[{"type":"TextBlock","text":"本日の日次チェックは完了です","wrap":true}]}]}}]}'''
+{{> teams-notify Url="WebhookUrl" Body="Body"}}
+{{> append-log Path="LogPath" Text="%Now% [OK] %JobName%: 全員提出済み"}}
+
+#! subflow LogCliError
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+{{> append-log Path="LogPath" Text="%Now% [ERROR] %JobName% exit=%CliExit% stderr=%CliErr%"}}
+{{> warn-dialog Title="バッチ失敗" Message="$'''fincalc.exe が失敗 (exit=%CliExit%)。ログを確認してください'''" Timeout="30"}}

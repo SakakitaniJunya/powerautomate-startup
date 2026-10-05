@@ -1,0 +1,77 @@
+# ============================================================
+# 18 - 遅延理由の回収: 担当者ごとに案件一覧カードを投稿
+# ------------------------------------------------------------
+# 遅延台帳 xlsx を fincalc.exe が読み、未提出の遅延案件を
+# 担当者1人につき1枚の Adaptive Card として Teams に投稿する。
+# カードには案件ごとの Input.Text (理由入力欄) と
+# 「提出」「一時保存」の Action.Submit を載せる。
+#
+#   Main            = 司令塔 (呼び出しと分岐のみ)
+#   LoadPending     = delay-list 実行 → Delay (persons/items)
+#   SendPersonCards = 担当者ごとに入力カードを投稿
+#   LogNoPending    = 未提出ゼロの正常終了をログ
+#   LogCliError     = exe 失敗をログ + 警告
+#
+# 台帳フォーマット: excel init-delay で雛形生成。
+#   列: 担当者 / メール / 案件 / 期限 / 遅延理由 / 状態
+#   状態: 未入力 | 一時保存 | 提出済
+#
+# 注意 (本番配線):
+#   - Workflows の一方向 webhook では Action.Submit の応答を
+#     受け取れない。入力値を戻す本番経路は Teams 側フローの
+#     「アダプティブ カードを投稿して応答を待つ」を使い、
+#     回答を受けた側が `excel delay-submit --row N --reason ...`
+#     (一時保存は --draft) で台帳へ書き戻す設計。
+#   - このモックではカード投稿までを PAD が担い、回答書き戻しは
+#     19 番の前に手動/別フローで delay-submit を呼ぶ想定。
+# ============================================================
+#! requires: ExePath WorkDir DelayXlsx WebhookUrl LogPath
+
+SET JobName TO $'''遅延理由の回収'''
+
+CALL LoadPending
+IF CliExit = 0 THEN
+    IF Delay.persons.Count > 0 THEN
+        CALL SendPersonCards
+    ELSE
+        CALL LogNoPending
+    END
+ELSE
+    CALL LogCliError
+END
+
+#! subflow LoadPending
+{{> run-cli Args="excel delay-list --input \"%DelayXlsx%\""}}
+IF CliExit = 0 THEN
+    {{> json-parse Into="Delay"}}
+END
+
+#! subflow SendPersonCards
+LOOP FOREACH P IN Delay.persons
+    # 案件ごとの入力欄コンテナを JSON 断片として組み立てる
+    SET InputsJson TO $''''''
+    SET First TO True
+    LOOP FOREACH It IN P.items
+        SET Frag TO $'''{"type":"Container","separator":true,"items":[{"type":"TextBlock","text":"%It.item% (期限 %It.due%)","weight":"bolder","wrap":true},{"type":"Input.Text","id":"row%It.row%","label":"遅延理由","placeholder":"例: 仕様確認待ち"}]}'''
+        IF First = True THEN
+            SET InputsJson TO Frag
+            SET First TO False
+        ELSE
+            SET InputsJson TO $'''%InputsJson%,%Frag%'''
+        END
+    END
+    SET Body TO $'''{"type":"message","attachments":[{"contentType":"application/vnd.microsoft.card.adaptive","content":{"type":"AdaptiveCard","$schema":"http://adaptivecards.io/schemas/adaptive-card.json","version":"1.4","body":[{"type":"TextBlock","text":"[遅延理由の入力依頼] %P.person% さん","weight":"bolder","size":"medium"},{"type":"TextBlock","text":"未提出 %P.pending% 件。各案件の遅延理由を入力して「提出」を押してください（途中なら「一時保存」）。","isSubtle":true,"wrap":true},%InputsJson%],"actions":[{"type":"Action.Submit","title":"提出","data":{"act":"submit","person":"%P.person%"}},{"type":"Action.Submit","title":"一時保存","data":{"act":"draft","person":"%P.person%"}}]}}]}'''
+    {{> teams-notify Url="WebhookUrl" Body="Body"}}
+    DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+    {{> append-log Path="LogPath" Text="%Now% [CARD] %P.person% へ未提出 %P.pending% 件のカードを投稿"}}
+END
+
+#! subflow LogNoPending
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+{{> append-log Path="LogPath" Text="%Now% [OK] %JobName%: 未提出なし"}}
+{{> info-dialog Title="完了" Message="$'''未提出の遅延案件はありません'''" Timeout="30"}}
+
+#! subflow LogCliError
+DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> Now
+{{> append-log Path="LogPath" Text="%Now% [ERROR] %JobName% exit=%CliExit% stderr=%CliErr%"}}
+{{> warn-dialog Title="バッチ失敗" Message="$'''fincalc.exe が失敗 (exit=%CliExit%)。ログを確認してください'''" Timeout="30"}}

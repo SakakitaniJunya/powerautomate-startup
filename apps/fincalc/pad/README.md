@@ -44,6 +44,10 @@ $PADKIT render-all apps/fincalc/pad/recipes --profile apps/fincalc/pad/profiles/
 | 13 | 承認依頼ループ (依頼カード → Yes/No → 結果カード) |
 | 14 | 実行監視 (開始/終了の2段カードでジョブをトレース) |
 | 15 | ボタン付きカード (Action.OpenUrl でファイル/チャット) |
+| 16 | サブフロー分割の雛形 (Main+RunCalc/NotifyOk/NotifyError を CALL 委譲) |
+| 17 | 部署別プロファイル → 異常あれば部長へ Outlook メール (5サブフロー) |
+| 18 | 遅延理由の回収: 担当者ごとに複数案件の入力カード投稿 |
+| 19 | 日次チェック: 未提出者へリマインド + 全員完了なら OK カード |
 
 ## Adaptive Card 組み立ての注意 (実機検証済み)
 
@@ -59,5 +63,24 @@ $PADKIT render-all apps/fincalc/pad/recipes --profile apps/fincalc/pad/profiles/
 - `IF` 条件で `Display.DialogResult.Yes` 等の enum 参照は貼り付け拒否。
   ボタン結果は `ButtonPressed = 'Yes'` の文字列比較で判定する。
 - `DateTimeFormat.Date` は非メンバー。`Date`/`DateAndTime`/`DateOnly` が有効。
+
+## Outlook メール送信 (17 番, PAD 11.2609 実機検証済み)
+
+- `Outlook.Launch.Launch Instance=> X` →
+  `Outlook.SendEmailThroughOutlook.SendEmail` → `Outlook.Close.Close Instance: X`
+- `SendTo` は宛先**リスト**型。`[Batch.managerEmail]` のように `%` を付けない
+  リストリテラルで渡す（`SendTo: %var%` は貼り付け拒否）
+- `Account:` は空にできない → 送信元アカウント名を `MailAccount` 変数で渡す
+- `IsDraft: True` にすると送信せず下書き保存（検証時に安全）
+- 宛先の部長メールは部署プロファイル JSON の `managerEmail` 由来
+  （fincalc の JSON 出力に載る。実アドレスは gitignore 側のプロファイルへ）
+
+## 遅延台帳 (18/19 番)
+
+- 台帳列: 担当者 / メール / 案件 / 期限 / 遅延理由 / 状態
+  （`excel init-delay` で雛形生成、部署別列名は `--columns` で対応可）
+- 状態は `未提出` / `一時保存` / `提出済`。`--draft` 提出は一時保存として残り、
+  `delay-status` の未提出カウントに含まれる（督促対象）
+- 19 番は日次ジョブとしてタスクスケジューラからフロー起動する運用を想定
 
 詳細は repo ルートの README (padkit) を参照。

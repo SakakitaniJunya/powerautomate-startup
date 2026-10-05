@@ -61,9 +61,9 @@ static Dictionary<string, string> ParseOpts(List<string> args)
     {
         if (!args[i].StartsWith("--")) continue;
         var key = args[i][2..];
-        if (i + 1 >= args.Count || args[i + 1].StartsWith("--"))
-            throw new ArgumentException($"--{key} に値がありません");
-        d[key] = args[++i];
+        // --flag 形式（次が -- または末尾）は真偽フラグとして "true" を格納
+        d[key] = (i + 1 < args.Count && !args[i + 1].StartsWith("--"))
+            ? args[++i] : "true";
     }
     return d;
 }
@@ -76,4 +76,5 @@ static string Usage(CommandRegistry registry) => """
     + """
 
     共通: --columns map.json で部署別のヘッダ名対応を上書き（excel 系のみ）
+          --dept profile.json で部署プロファイル（列対応+異常ルール+部長メール）を適用
     """;

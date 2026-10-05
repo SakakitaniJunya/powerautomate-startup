@@ -11,6 +11,9 @@
   "DoneDir": "C:\\tools\\fincalc\\done",
   "InputXlsx": "C:\\tools\\fincalc\\in\\assets.xlsx",
   "OutputXlsx": "C:\\tools\\fincalc\\out\\dep_result.xlsx",
+  "DeptProfilePath": "C:\\tools\\fincalc\\columns\\dept-a.example.json",
+  "MailAccount": "sender@example.com",
+  "DelayXlsx": "C:\\tools\\fincalc\\in\\delay.xlsx",
   "LogPath": "C:\\tools\\fincalc\\out\\flow.log",
   "ErrorLog": "C:\\tools\\fincalc\\out\\errors.log",
   "WebhookUrl": "https://example.webhook.office.com/webhookb2/xxxxx"

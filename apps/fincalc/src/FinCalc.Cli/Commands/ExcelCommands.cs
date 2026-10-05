@@ -3,18 +3,32 @@ using FinCalc.Excel;
 
 namespace FinCalc.Cli.Commands;
 
-/// <summary>excel dep-batch — 資産台帳 xlsx を一括償却計算。</summary>
+/// <summary>excel dep-batch — 資産台帳 xlsx を一括償却計算。--dept で部署別プロファイル適用。</summary>
 public sealed class ExcelDepBatchCommand : ICommand
 {
     public string Name => "excel dep-batch";
-    public string Usage => "excel dep-batch       --input assets.xlsx [--sheet 名|番号|*] [--header-row N] [--output out.xlsx] [--columns map.json]";
+    public string Usage => "excel dep-batch       --input assets.xlsx [--sheet 名|番号|*] [--header-row N] [--output out.xlsx] [--columns map.json | --dept profile.json]";
 
     public object Run(CommandArgs a)
     {
         var input = a.Req("input");
-        var r = new DepreciationBatchProcessor(a.LoadColumns().Asset)
+        var dept = a.LoadDepartment();
+        var r = new DepreciationBatchProcessor(
+                dept?.Columns.Asset ?? a.LoadColumns().Asset,
+                anomalyRules: dept?.Anomaly)
             .Run(input, a.Opt("sheet"), a.OptInt("header-row"), a.Opt("output"));
-        return new { input, output = r.OutputPath, r.OkCount, r.ErrorCount, summary = r.Summary };
+        return new
+        {
+            input,
+            output = r.OutputPath,
+            department = dept?.Name,
+            managerEmail = dept?.ManagerEmail,
+            r.OkCount,
+            r.ErrorCount,
+            anomalyCount = r.Anomalies.Count,
+            anomalies = r.Anomalies,
+            summary = r.Summary,
+        };
     }
 }
 
@@ -22,13 +36,14 @@ public sealed class ExcelDepBatchCommand : ICommand
 public sealed class ExcelInvoiceCommand : ICommand
 {
     public string Name => "excel invoice";
-    public string Usage => "excel invoice         --input lines.xlsx [--sheet 名|番号|*] [--header-row N] [--output out.xlsx] [--round ...] [--columns map.json]";
+    public string Usage => "excel invoice         --input lines.xlsx [--sheet 名|番号|*] [--header-row N] [--output out.xlsx] [--round ...] [--columns map.json | --dept profile.json]";
 
     public object Run(CommandArgs a)
     {
         var input = a.Req("input");
+        var dept = a.LoadDepartment();
         var output = a.Opt("output") ?? Path.ChangeExtension(input, ".tax-result.xlsx");
-        var r = new InvoiceBatchProcessor(a.LoadColumns().Invoice)
+        var r = new InvoiceBatchProcessor(dept?.Columns.Invoice ?? a.LoadColumns().Invoice)
             .Run(input, a.Opt("sheet"), a.OptInt("header-row"), output, a.OptRound());
         return new { input, output, r.Groups, r.NetTotal, r.TaxTotal, r.GrossTotal };
     }
@@ -43,7 +58,7 @@ public sealed class ExcelReadCommand : ICommand
     public object Run(CommandArgs a)
     {
         var input = a.Req("input");
-        var columns = a.LoadColumns();
+        var columns = a.LoadDepartment()?.Columns ?? a.LoadColumns();
         var known = columns.Asset.AllHeaders.Concat(columns.Invoice.AllHeaders);
         using var wb = new XLWorkbook(input);
         var sheets = SheetReader.TargetSheets(wb, a.Opt("sheet"))

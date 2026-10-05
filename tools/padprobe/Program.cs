@@ -118,6 +118,15 @@ switch (mode)
         break;
     }
 
+    case "dblclickname":
+    {
+        var el = FindByName(args[1], args[2]);
+        if (el is null) { Console.WriteLine($"not found: {args[2]}"); return; }
+        el.DoubleClick();
+        Console.WriteLine($"dblclicked '{el.Name}'");
+        break;
+    }
+
     case "rclick":
     {
         var el = FindByAutoId(args[1], args[2]);
